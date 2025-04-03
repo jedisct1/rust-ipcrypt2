@@ -27,6 +27,8 @@ ipcrypt2 = "0.1"  # Replace with the latest version
 
 ## Usage
 
+The [ipcrypt2 API documentation](https://docs.rs/ipcrypt2) is available on `docs.rs`.
+
 Below is an example demonstrating both deterministic (format-preserving) and non-deterministic encryption modes:
 
 ```rust
