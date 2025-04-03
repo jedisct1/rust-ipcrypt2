@@ -72,6 +72,13 @@ pub struct Ipcrypt {
 }
 
 impl Ipcrypt {
+    /// Creates a random key for the IPCrypt instance.
+    pub fn random_key() -> [u8; IPCRYPT_KEYBYTES] {
+        let mut key = [0u8; IPCRYPT_KEYBYTES];
+        getrandom::fill(&mut key).expect("Failed to fill random bytes");
+        key
+    }
+
     /// Creates a new Ipcrypt instance with the given secret key.
     ///
     /// # Panics

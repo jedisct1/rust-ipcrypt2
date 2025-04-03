@@ -36,7 +36,7 @@ use std::net::{IpAddr, Ipv4Addr};
 use ipcrypt2::{Ipcrypt, IPCRYPT_KEYBYTES};
 
 // Create a secret key with the required length.
-let key = [0u8; IPCRYPT_KEYBYTES];
+let key = Ipcrypt::random_key();
 
 // Initialize the ipcrypt2 context.
 let ipcrypt = Ipcrypt::new(&key);
