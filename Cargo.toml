@@ -1,0 +1,27 @@
+[package]
+name = "ipcrypt2"
+version = "0.1.0"
+edition = "2021"
+license = "ISC"
+authors = ["Frank Denis <github@pureftpd.org>"]
+homepage = "https://github.com/jedisct1/rust-ipcrypt2"
+repository = "https://github.com/jedisct1/rust-ipcrypt2"
+categories = ["cryptography", "wasm"]
+keywords = ["crypto", "ip", "address", "obfuscation", "privacy"]
+description = "IP address obfuscation library"
+readme = "README.md"
+
+[dependencies]
+[target.'cfg(all(any(target_arch = "wasm32", target_arch = "wasm64"), target_os = "unknown"))'.dependencies]
+getrandom = { version = "0.3", features = ["wasm_js"] }
+
+[target.'cfg(not(all(any(target_arch = "wasm32", target_arch = "wasm64"), target_os = "unknown")))'.dependencies]
+getrandom = { version = "0.3" }
+
+[build-dependencies]
+cc = "1.2"
+
+[profile.release]
+codegen-units = 1
+incremental = false
+panic = "abort"
