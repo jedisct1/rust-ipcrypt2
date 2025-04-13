@@ -1,14 +1,18 @@
 [package]
 name = "ipcrypt2"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 license = "ISC"
 authors = ["Frank Denis <github@pureftpd.org>"]
 homepage = "https://github.com/jedisct1/rust-ipcrypt2"
 repository = "https://github.com/jedisct1/rust-ipcrypt2"
-categories = ["cryptography", "wasm"]
-keywords = ["crypto", "ip", "address", "obfuscation", "privacy"]
-description = "IP address obfuscation library"
+documentation = "https://docs.rs/ipcrypt2"
+categories = ["cryptography", "wasm", "security", "no-std"]
+keywords = ["crypto", "ip", "address", "obfuscation", "privacy", "encryption", "aes"]
+description = """
+A Rust library for format-preserving encryption of IP addresses.
+Supports both deterministic and non-deterministic encryption modes.
+"""
 readme = "README.md"
 
 [dependencies]
