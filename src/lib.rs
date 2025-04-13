@@ -510,6 +510,143 @@ impl Ipcrypt {
         let ip = Ipcrypt::str_to_ip16(&decrypted_str)?;
         ip16_to_ipaddr(ip)
     }
+
+    /// Creates a new Ipcrypt instance with a randomly generated key.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use ipcrypt2::Ipcrypt;
+    ///
+    /// let ipcrypt = Ipcrypt::new_random();
+    /// ```
+    pub fn new_random() -> Self {
+        Self::new(Self::generate_key())
+    }
+
+    /// Encrypts an IP address string and returns the result as a new string.
+    /// This is a convenience method that handles both IPv4 and IPv6 addresses.
+    ///
+    /// # Arguments
+    ///
+    /// * `ip` - The IP address string to encrypt (IPv4 or IPv6)
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use ipcrypt2::Ipcrypt;
+    ///
+    /// let ipcrypt = Ipcrypt::new_random();
+    /// let encrypted = ipcrypt.encrypt("192.168.1.1").unwrap();
+    /// let decrypted = ipcrypt.decrypt(&encrypted).unwrap();
+    /// assert_eq!("192.168.1.1", decrypted);
+    /// ```
+    pub fn encrypt(&self, ip: &str) -> Result<String, IpcryptError> {
+        self.encrypt_ip_str(ip)
+    }
+
+    /// Decrypts an encrypted IP address string.
+    /// This is a convenience method that handles both IPv4 and IPv6 addresses.
+    ///
+    /// # Arguments
+    ///
+    /// * `encrypted` - The encrypted IP address string to decrypt
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use ipcrypt2::Ipcrypt;
+    ///
+    /// let ipcrypt = Ipcrypt::new_random();
+    /// let encrypted = ipcrypt.encrypt("192.168.1.1").unwrap();
+    /// let decrypted = ipcrypt.decrypt(&encrypted).unwrap();
+    /// assert_eq!("192.168.1.1", decrypted);
+    /// ```
+    pub fn decrypt(&self, encrypted: &str) -> Result<String, IpcryptError> {
+        self.decrypt_ip_str(encrypted)
+    }
+
+    /// Non-deterministically encrypts an IP address string and returns the result as a hex string.
+    /// This is a convenience method that handles both IPv4 and IPv6 addresses.
+    ///
+    /// # Arguments
+    ///
+    /// * `ip` - The IP address string to encrypt (IPv4 or IPv6)
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use ipcrypt2::Ipcrypt;
+    ///
+    /// let ipcrypt = Ipcrypt::new_random();
+    /// let encrypted = ipcrypt.encrypt_nd("192.168.1.1").unwrap();
+    /// let decrypted = ipcrypt.decrypt_nd(&encrypted).unwrap();
+    /// assert_eq!("192.168.1.1", decrypted);
+    /// ```
+    pub fn encrypt_nd(&self, ip: &str) -> Result<String, IpcryptError> {
+        self.nd_encrypt_ip_str(ip)
+    }
+
+    /// Non-deterministically decrypts an encrypted IP address string.
+    /// This is a convenience method that handles both IPv4 and IPv6 addresses.
+    ///
+    /// # Arguments
+    ///
+    /// * `encrypted` - The encrypted IP address string to decrypt
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use ipcrypt2::Ipcrypt;
+    ///
+    /// let ipcrypt = Ipcrypt::new_random();
+    /// let encrypted = ipcrypt.encrypt_nd("192.168.1.1").unwrap();
+    /// let decrypted = ipcrypt.decrypt_nd(&encrypted).unwrap();
+    /// assert_eq!("192.168.1.1", decrypted);
+    /// ```
+    pub fn decrypt_nd(&self, encrypted: &str) -> Result<String, IpcryptError> {
+        self.nd_decrypt_ip_str(encrypted)
+    }
+
+    /// Converts an IP address string to its 16-byte representation.
+    /// This is a convenience method that handles both IPv4 and IPv6 addresses.
+    ///
+    /// # Arguments
+    ///
+    /// * `ip` - The IP address string to convert
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use ipcrypt2::Ipcrypt;
+    ///
+    /// let ip16 = Ipcrypt::to_bytes("192.168.1.1").unwrap();
+    /// let ip_str = Ipcrypt::from_bytes(&ip16).unwrap();
+    /// assert_eq!("192.168.1.1", ip_str);
+    /// ```
+    pub fn to_bytes(ip: &str) -> Result<[u8; 16], IpcryptError> {
+        Self::str_to_ip16(ip)
+    }
+
+    /// Converts a 16-byte IP address representation to a string.
+    /// This is a convenience method that handles both IPv4 and IPv6 addresses.
+    ///
+    /// # Arguments
+    ///
+    /// * `ip16` - The 16-byte IP address to convert
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use ipcrypt2::Ipcrypt;
+    ///
+    /// let ip16 = Ipcrypt::to_bytes("192.168.1.1").unwrap();
+    /// let ip_str = Ipcrypt::from_bytes(&ip16).unwrap();
+    /// assert_eq!("192.168.1.1", ip_str);
+    /// ```
+    pub fn from_bytes(ip16: &[u8; 16]) -> Result<String, IpcryptError> {
+        Self::ip16_to_str(ip16)
+    }
 }
 
 impl Drop for Ipcrypt {
@@ -678,6 +815,101 @@ impl IpcryptNdx {
         let decrypted_str = self.nd_decrypt_ip_str(encrypted)?;
         let ip = Ipcrypt::str_to_ip16(&decrypted_str)?;
         ip16_to_ipaddr(ip)
+    }
+
+    /// Creates a new IpcryptNdx instance with a randomly generated key.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use ipcrypt2::IpcryptNdx;
+    ///
+    /// let ipcrypt = IpcryptNdx::new_random();
+    /// ```
+    pub fn new_random() -> Self {
+        Self::new(Self::generate_key())
+    }
+
+    /// Non-deterministically encrypts an IP address string and returns the result as a hex string.
+    /// This is a convenience method that handles both IPv4 and IPv6 addresses.
+    ///
+    /// # Arguments
+    ///
+    /// * `ip` - The IP address string to encrypt (IPv4 or IPv6)
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use ipcrypt2::IpcryptNdx;
+    ///
+    /// let ipcrypt = IpcryptNdx::new_random();
+    /// let encrypted = ipcrypt.encrypt("192.168.1.1").unwrap();
+    /// let decrypted = ipcrypt.decrypt(&encrypted).unwrap();
+    /// assert_eq!("192.168.1.1", decrypted);
+    /// ```
+    pub fn encrypt(&self, ip: &str) -> Result<String, IpcryptError> {
+        self.nd_encrypt_ip_str(ip)
+    }
+
+    /// Non-deterministically decrypts an encrypted IP address string.
+    /// This is a convenience method that handles both IPv4 and IPv6 addresses.
+    ///
+    /// # Arguments
+    ///
+    /// * `encrypted` - The encrypted IP address string to decrypt
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use ipcrypt2::IpcryptNdx;
+    ///
+    /// let ipcrypt = IpcryptNdx::new_random();
+    /// let encrypted = ipcrypt.encrypt("192.168.1.1").unwrap();
+    /// let decrypted = ipcrypt.decrypt(&encrypted).unwrap();
+    /// assert_eq!("192.168.1.1", decrypted);
+    /// ```
+    pub fn decrypt(&self, encrypted: &str) -> Result<String, IpcryptError> {
+        self.nd_decrypt_ip_str(encrypted)
+    }
+
+    /// Converts an IP address string to its 16-byte representation.
+    /// This is a convenience method that handles both IPv4 and IPv6 addresses.
+    ///
+    /// # Arguments
+    ///
+    /// * `ip` - The IP address string to convert
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use ipcrypt2::IpcryptNdx;
+    ///
+    /// let ip16 = IpcryptNdx::to_bytes("192.168.1.1").unwrap();
+    /// let ip_str = IpcryptNdx::from_bytes(&ip16).unwrap();
+    /// assert_eq!("192.168.1.1", ip_str);
+    /// ```
+    pub fn to_bytes(ip: &str) -> Result<[u8; 16], IpcryptError> {
+        Ipcrypt::str_to_ip16(ip)
+    }
+
+    /// Converts a 16-byte IP address representation to a string.
+    /// This is a convenience method that handles both IPv4 and IPv6 addresses.
+    ///
+    /// # Arguments
+    ///
+    /// * `ip16` - The 16-byte IP address to convert
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use ipcrypt2::IpcryptNdx;
+    ///
+    /// let ip16 = IpcryptNdx::to_bytes("192.168.1.1").unwrap();
+    /// let ip_str = IpcryptNdx::from_bytes(&ip16).unwrap();
+    /// assert_eq!("192.168.1.1", ip_str);
+    /// ```
+    pub fn from_bytes(ip16: &[u8; 16]) -> Result<String, IpcryptError> {
+        Ipcrypt::ip16_to_str(ip16)
     }
 }
 
