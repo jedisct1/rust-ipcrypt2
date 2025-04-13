@@ -661,7 +661,7 @@ impl Drop for Ipcrypt {
 ///
 /// It can be only used for non-deterministic encryption with 16-byte tweaks.
 ///
-/// Non-deterministic encryption in ND mode runs at half the speed of encryption with 8-byte tweaks.
+/// Non-deterministic encryption in ND mode runs slower than encryption with 8-byte tweaks.
 /// Ciphertexts are also longer, and the key is 32 byte long. However, the 16-byte tweak has higher
 /// usage limits before collisions occur.
 pub struct IpcryptNdx {
