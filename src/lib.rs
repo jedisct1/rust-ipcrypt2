@@ -1,6 +1,8 @@
 #![doc = include_str!("../README.md")]
 
+use std::error::Error;
 use std::ffi::{CStr, CString};
+use std::fmt;
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
 use std::os::raw::{c_char, c_int};
 
@@ -81,41 +83,110 @@ extern "C" {
 /// An error type for the safe Ipcrypt interface.
 #[derive(Debug)]
 pub enum IpcryptError {
+    /// Input contains a null byte
     NullByteInInput,
-    Utf8Error,
+    /// Failed to convert bytes to UTF-8 string
+    Utf8Error(std::str::Utf8Error),
+    /// Operation failed (e.g., invalid IP format)
     OperationFailed,
+}
+
+impl fmt::Display for IpcryptError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            IpcryptError::NullByteInInput => write!(f, "input contains a null byte"),
+            IpcryptError::Utf8Error(e) => write!(f, "UTF-8 conversion error: {}", e),
+            IpcryptError::OperationFailed => write!(f, "operation failed"),
+        }
+    }
+}
+
+impl Error for IpcryptError {
+    fn source(&self) -> Option<&(dyn Error + 'static)> {
+        match self {
+            IpcryptError::Utf8Error(e) => Some(e),
+            _ => None,
+        }
+    }
+}
+
+impl From<std::str::Utf8Error> for IpcryptError {
+    fn from(err: std::str::Utf8Error) -> Self {
+        IpcryptError::Utf8Error(err)
+    }
 }
 
 /// A structure representing the IPCrypt context.
 ///
-/// It can be used for deterministic encryption, as well as non-deterministic encryption with 8-byte tweaks.
+/// This struct provides methods for encrypting and decrypting IP addresses
+/// using both deterministic and non-deterministic modes.
+///
+/// # Examples
+///
+/// ```
+/// use ipcrypt2::Ipcrypt;
+///
+/// let key = Ipcrypt::generate_key();
+/// let ipcrypt = Ipcrypt::new(key);
+///
+/// // Encrypt an IP address
+/// let ip = "192.168.1.1";
+/// let encrypted = ipcrypt.encrypt_ip_str(ip).unwrap();
+/// let decrypted = ipcrypt.decrypt_ip_str(&encrypted).unwrap();
+/// assert_eq!(ip, decrypted);
+/// ```
 pub struct Ipcrypt {
     inner: IPCrypt,
 }
 
 impl Ipcrypt {
-    /// The number of bytes in the key used for encryption/decryption.
+    /// The number of bytes required for the encryption key.
     pub const KEY_BYTES: usize = 16;
 
-    /// The number of bytes in the tweak used for encryption/decryption.
+    /// The number of bytes in the tweak used for non-deterministic encryption.
     pub const TWEAK_BYTES: usize = 8;
 
-    /// The maximum number of bytes in the encrypted IP string (including null terminator).
+    /// The number of bytes in the encrypted output for non-deterministic mode.
     pub const NDIP_BYTES: usize = 24;
 
     /// The maximum number of bytes in the encrypted IP string (including null terminator).
     pub const NDIP_STR_BYTES: usize = 48 + 1;
 
-    /// Creates a random key for the Ipcrypt instance.
+    /// Generates a new random key for encryption.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use ipcrypt2::Ipcrypt;
+    ///
+    /// let key = Ipcrypt::generate_key();
+    /// let ipcrypt = Ipcrypt::new(key);
+    /// ```
     pub fn generate_key() -> [u8; Self::KEY_BYTES] {
         let mut key = [0u8; Self::KEY_BYTES];
         getrandom::fill(&mut key).expect("Failed to fill random bytes");
         key
     }
 
-    /// Creates a new Ipcrypt instance with the given secret key.
+    /// Creates a new Ipcrypt instance with the given key.
+    ///
+    /// # Arguments
+    ///
+    /// * `key` - A 16-byte array containing the encryption key.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use ipcrypt2::Ipcrypt;
+    ///
+    /// let key = [0u8; 16];
+    /// let ipcrypt = Ipcrypt::new(key);
+    /// ```
     pub fn new(key: [u8; Self::KEY_BYTES]) -> Self {
+        // Safety: IPCrypt is a C struct with a fixed size and no alignment requirements
         let mut inner = std::mem::MaybeUninit::<IPCrypt>::uninit();
+
+        // Safety: We have a valid pointer to uninitialized memory and a valid key pointer
         unsafe {
             ipcrypt_init(inner.as_mut_ptr(), key.as_ptr());
             Self {
@@ -126,6 +197,7 @@ impl Ipcrypt {
 
     /// Encrypts a 16-byte IP address in place.
     pub fn encrypt_ip16(&self, ip: &mut [u8; 16]) {
+        // Safety: We have a valid IPCrypt instance and a valid mutable pointer to 16 bytes
         unsafe {
             ipcrypt_encrypt_ip16(&self.inner, ip.as_mut_ptr());
         }
@@ -133,6 +205,7 @@ impl Ipcrypt {
 
     /// Decrypts a 16-byte IP address in place.
     pub fn decrypt_ip16(&self, ip: &mut [u8; 16]) {
+        // Safety: We have a valid IPCrypt instance and a valid mutable pointer to 16 bytes
         unsafe {
             ipcrypt_decrypt_ip16(&self.inner, ip.as_mut_ptr());
         }
@@ -144,6 +217,8 @@ impl Ipcrypt {
     pub fn encrypt_ip_str(&self, ip: &str) -> Result<String, IpcryptError> {
         let c_ip = CString::new(ip).map_err(|_| IpcryptError::NullByteInInput)?;
         let mut buffer = [0u8; MAX_IP_STR_BYTES];
+
+        // Safety: We have valid pointers to initialized memory and a valid C string
         let ret = unsafe {
             ipcrypt_encrypt_ip_str(
                 &self.inner,
@@ -151,14 +226,17 @@ impl Ipcrypt {
                 c_ip.as_ptr(),
             )
         };
+
         if ret == 0 {
             return Err(IpcryptError::OperationFailed);
         }
+
+        // Safety: The buffer is null-terminated and contains valid UTF-8
         unsafe {
             CStr::from_ptr(buffer.as_ptr() as *const c_char)
                 .to_str()
                 .map(|s| s.to_owned())
-                .map_err(|_| IpcryptError::Utf8Error)
+                .map_err(Into::into)
         }
     }
 
@@ -182,7 +260,7 @@ impl Ipcrypt {
             CStr::from_ptr(buffer.as_ptr() as *const c_char)
                 .to_str()
                 .map(|s| s.to_owned())
-                .map_err(|_| IpcryptError::Utf8Error)
+                .map_err(Into::into)
         }
     }
 
@@ -233,7 +311,7 @@ impl Ipcrypt {
             CStr::from_ptr(buffer.as_ptr() as *const c_char)
                 .to_str()
                 .map(|s| s.to_owned())
-                .map_err(|_| IpcryptError::Utf8Error)
+                .map_err(Into::into)
         }
     }
 
@@ -257,7 +335,7 @@ impl Ipcrypt {
             CStr::from_ptr(buffer.as_ptr() as *const c_char)
                 .to_str()
                 .map(|s| s.to_owned())
-                .map_err(|_| IpcryptError::Utf8Error)
+                .map_err(Into::into)
         }
     }
 
@@ -288,56 +366,119 @@ impl Ipcrypt {
             CStr::from_ptr(buffer.as_ptr() as *const c_char)
                 .to_str()
                 .map(|s| s.to_owned())
-                .map_err(|_| IpcryptError::Utf8Error)
+                .map_err(Into::into)
         }
     }
 
-    // --- Additional interfaces using std::net::IpAddr ---
-
-    /// Encrypts an `IpAddr` using the format-preserving encryption for IP strings.
+    /// Encrypts an IP address and returns the result as a new IP address.
     ///
-    /// Returns the encrypted IP as an `IpAddr` (the encrypted string is parsed back into an `IpAddr`).
+    /// # Arguments
+    ///
+    /// * `ip` - The IP address to encrypt
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use ipcrypt2::Ipcrypt;
+    /// use std::net::IpAddr;
+    ///
+    /// let ipcrypt = Ipcrypt::new([0u8; 16]);
+    /// let ip = "192.168.1.1".parse::<IpAddr>().unwrap();
+    /// let encrypted = ipcrypt.encrypt_ipaddr(ip).unwrap();
+    /// ```
     pub fn encrypt_ipaddr(&self, ip: IpAddr) -> Result<IpAddr, IpcryptError> {
         let mut ip16 = ipaddr_to_ip16(ip);
         self.encrypt_ip16(&mut ip16);
-        let encrypted_ip = ip16_to_ipaddr(ip16)?;
-        Ok(encrypted_ip)
+        ip16_to_ipaddr(ip16)
     }
 
-    /// Decrypts an encrypted `IpAddr` (provided as an `IpAddr` type).
+    /// Decrypts an encrypted IP address and returns the result as a new IP address.
     ///
-    /// Returns the original `IpAddr` on success.
+    /// # Arguments
+    ///
+    /// * `encrypted` - The encrypted IP address to decrypt
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use ipcrypt2::Ipcrypt;
+    /// use std::net::IpAddr;
+    ///
+    /// let ipcrypt = Ipcrypt::new([0u8; 16]);
+    /// let ip = "192.168.1.1".parse::<IpAddr>().unwrap();
+    /// let encrypted = ipcrypt.encrypt_ipaddr(ip).unwrap();
+    /// let decrypted = ipcrypt.decrypt_ipaddr(encrypted).unwrap();
+    /// assert_eq!(ip, decrypted);
+    /// ```
     pub fn decrypt_ipaddr(&self, encrypted: IpAddr) -> Result<IpAddr, IpcryptError> {
         let mut ip16 = ipaddr_to_ip16(encrypted);
         self.decrypt_ip16(&mut ip16);
-        let decrypted_ip = ip16_to_ipaddr(ip16)?;
-        Ok(decrypted_ip)
+        ip16_to_ipaddr(ip16)
     }
 
-    /// Non-deterministically encrypts an `IpAddr` using the IP string interface.
+    /// Non-deterministically encrypts an IP address and returns the result as a byte array.
     ///
-    /// Returns the encrypted IP as an `IpAddr`.
+    /// # Arguments
+    ///
+    /// * `ip` - The IP address to encrypt
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use ipcrypt2::Ipcrypt;
+    /// use std::net::IpAddr;
+    ///
+    /// let ipcrypt = Ipcrypt::new([0u8; 16]);
+    /// let ip = "192.168.1.1".parse::<IpAddr>().unwrap();
+    /// let encrypted = ipcrypt.nd_encrypt_ipaddr(ip).unwrap();
+    /// ```
     pub fn nd_encrypt_ipaddr(&self, ip: IpAddr) -> Result<[u8; Self::NDIP_BYTES], IpcryptError> {
-        let ip_str = ipaddr_to_ip16(ip);
-        let encrypted = self.nd_encrypt_ip16(&ip_str);
-        Ok(encrypted)
+        let ip16 = ipaddr_to_ip16(ip);
+        Ok(self.nd_encrypt_ip16(&ip16))
     }
 
-    /// Non-deterministically decrypts an encrypted `IpAddr` (provided as an `IpAddr` type).
+    /// Non-deterministically decrypts an encrypted IP address and returns the result as a new IP address.
     ///
-    /// Returns the original `IpAddr` on success.
+    /// # Arguments
+    ///
+    /// * `encrypted` - The encrypted IP address bytes to decrypt
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use ipcrypt2::Ipcrypt;
+    /// use std::net::IpAddr;
+    ///
+    /// let ipcrypt = Ipcrypt::new([0u8; 16]);
+    /// let ip = "192.168.1.1".parse::<IpAddr>().unwrap();
+    /// let encrypted = ipcrypt.nd_encrypt_ipaddr(ip).unwrap();
+    /// let decrypted = ipcrypt.nd_decrypt_ipaddr(encrypted).unwrap();
+    /// assert_eq!(ip, decrypted);
+    /// ```
     pub fn nd_decrypt_ipaddr(
         &self,
         encrypted: [u8; Self::NDIP_BYTES],
     ) -> Result<IpAddr, IpcryptError> {
         let decrypted = self.nd_decrypt_ip16(&encrypted);
-        let decrypted_ip = ip16_to_ipaddr(decrypted)?;
-        Ok(decrypted_ip)
+        ip16_to_ipaddr(decrypted)
     }
 
-    /// Non-deterministically encrypts an IP address (IPv4 or IPv6).
+    /// Non-deterministically encrypts an IP address and returns the result as a hex string.
     ///
-    /// Returns a hex-encoded string.
+    /// # Arguments
+    ///
+    /// * `ip` - The IP address to encrypt
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use ipcrypt2::Ipcrypt;
+    /// use std::net::IpAddr;
+    ///
+    /// let ipcrypt = Ipcrypt::new([0u8; 16]);
+    /// let ip = "192.168.1.1".parse::<IpAddr>().unwrap();
+    /// let encrypted = ipcrypt.nd_encrypt_ipaddr_str(ip).unwrap();
+    /// ```
     pub fn nd_encrypt_ipaddr_str(&self, ip: IpAddr) -> Result<String, IpcryptError> {
         let ip_str = match ip {
             IpAddr::V4(v4) => v4.to_string(),
@@ -346,9 +487,24 @@ impl Ipcrypt {
         self.nd_encrypt_ip_str(&ip_str)
     }
 
-    /// Non-deterministically decrypts an encrypted IP address string.
+    /// Non-deterministically decrypts an encrypted IP address string and returns the result as a new IP address.
     ///
-    /// Returns the decrypted `IpAddr` on success.
+    /// # Arguments
+    ///
+    /// * `encrypted` - The encrypted IP address string to decrypt
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use ipcrypt2::Ipcrypt;
+    /// use std::net::IpAddr;
+    ///
+    /// let ipcrypt = Ipcrypt::new([0u8; 16]);
+    /// let ip = "192.168.1.1".parse::<IpAddr>().unwrap();
+    /// let encrypted = ipcrypt.nd_encrypt_ipaddr_str(ip).unwrap();
+    /// let decrypted = ipcrypt.nd_decrypt_ipaddr_str(&encrypted).unwrap();
+    /// assert_eq!(ip, decrypted);
+    /// ```
     pub fn nd_decrypt_ipaddr_str(&self, encrypted: &str) -> Result<IpAddr, IpcryptError> {
         let decrypted_str = self.nd_decrypt_ip_str(encrypted)?;
         let ip = Ipcrypt::str_to_ip16(&decrypted_str)?;
@@ -453,7 +609,7 @@ impl IpcryptNdx {
             CStr::from_ptr(buffer.as_ptr() as *const c_char)
                 .to_str()
                 .map(|s| s.to_owned())
-                .map_err(|_| IpcryptError::Utf8Error)
+                .map_err(Into::into)
         }
     }
 
@@ -477,7 +633,7 @@ impl IpcryptNdx {
             CStr::from_ptr(buffer.as_ptr() as *const c_char)
                 .to_str()
                 .map(|s| s.to_owned())
-                .map_err(|_| IpcryptError::Utf8Error)
+                .map_err(Into::into)
         }
     }
 
@@ -563,7 +719,7 @@ pub fn ip16_to_str(ip16: &[u8; 16]) -> Result<String, IpcryptError> {
         CStr::from_ptr(buffer.as_ptr() as *const c_char)
             .to_str()
             .map(|s| s.to_owned())
-            .map_err(|_| IpcryptError::Utf8Error)
+            .map_err(Into::into)
     }
 }
 
