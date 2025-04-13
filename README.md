@@ -39,12 +39,12 @@ use std::net::{IpAddr, Ipv4Addr};
 use ipcrypt2::{Ipcrypt, IpcryptNdx};
 
 // Create secret keys with the required lengths.
-let key = Ipcrypt::random_key();
-let ndx_key = IpcryptNdx::random_key();
+let key = Ipcrypt::generate_key();
+let ndx_key = IpcryptNdx::generate_key();
 
 // Initialize the ipcrypt2 contexts.
-let ipcrypt = Ipcrypt::new(&key);
-let ipcrypt_ndx = IpcryptNdx::new(&ndx_key);
+let ipcrypt = Ipcrypt::new(key);
+let ipcrypt_ndx = IpcryptNdx::new(ndx_key);
 
 // --- Deterministic (Format-Preserving) Mode ---
 // Encrypting an IP address preserves its format.
@@ -85,11 +85,11 @@ The primary interfaces are provided by the `Ipcrypt` and `IpcryptNdx` structs, w
 
 ### Initialization
 
-- **`Ipcrypt::new(key: &[u8])`**
-  Creates a new instance with a secret key. The key must be exactly `KEY_BYTES` (16) bytes long.
+- **`Ipcrypt::new(key: [u8; KEY_BYTES])`**
+  Creates a new instance with a secret key. The key must be exactly 16 bytes long.
 
-- **`IpcryptNdx::new(key: &[u8])`**
-  Creates a new NDX instance with a secret key. The key must be exactly `KEY_BYTES` (32) bytes long.
+- **`IpcryptNdx::new(key: [u8; KEY_BYTES])`**
+  Creates a new NDX instance with a secret key. The key must be exactly 32 bytes long.
 
 ### Deterministic Methods (Format-Preserving)
 

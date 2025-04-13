@@ -107,23 +107,14 @@ impl Ipcrypt {
     pub const NDIP_STR_BYTES: usize = 48 + 1;
 
     /// Creates a random key for the Ipcrypt instance.
-    pub fn random_key() -> [u8; Self::KEY_BYTES] {
+    pub fn generate_key() -> [u8; Self::KEY_BYTES] {
         let mut key = [0u8; Self::KEY_BYTES];
         getrandom::fill(&mut key).expect("Failed to fill random bytes");
         key
     }
 
     /// Creates a new Ipcrypt instance with the given secret key.
-    ///
-    /// # Panics
-    ///
-    /// Panics if the key length is not equal to KEY_BYTES.
-    pub fn new(key: &[u8]) -> Self {
-        assert!(
-            key.len() == Self::KEY_BYTES,
-            "Key must be {} bytes",
-            Self::KEY_BYTES
-        );
+    pub fn new(key: [u8; Self::KEY_BYTES]) -> Self {
         let mut inner = std::mem::MaybeUninit::<IPCrypt>::uninit();
         unsafe {
             ipcrypt_init(inner.as_mut_ptr(), key.as_ptr());
@@ -398,23 +389,14 @@ impl IpcryptNdx {
     pub const NDIP_STR_BYTES: usize = 64 + 1;
 
     /// Creates a random key for the Ipcrypt instance.
-    pub fn random_key() -> [u8; Self::KEY_BYTES] {
+    pub fn generate_key() -> [u8; Self::KEY_BYTES] {
         let mut key = [0u8; Self::KEY_BYTES];
         getrandom::fill(&mut key).expect("Failed to fill random bytes");
         key
     }
 
     /// Creates a new Ipcrypt instance with the given secret key.
-    ///
-    /// # Panics
-    ///
-    /// Panics if the key length is not equal to KEY_BYTES.
-    pub fn new(key: &[u8]) -> Self {
-        assert!(
-            key.len() == Self::KEY_BYTES,
-            "Key must be {} bytes",
-            Self::KEY_BYTES
-        );
+    pub fn new(key: [u8; Self::KEY_BYTES]) -> Self {
         let mut inner = std::mem::MaybeUninit::<IPCryptNDX>::uninit();
         unsafe {
             ipcrypt_ndx_init(inner.as_mut_ptr(), key.as_ptr());
@@ -616,7 +598,7 @@ mod tests {
     #[test]
     fn test_ip16_encrypt_decrypt() {
         let key = [0u8; Ipcrypt::KEY_BYTES];
-        let ipcrypt = Ipcrypt::new(&key);
+        let ipcrypt = Ipcrypt::new(key);
         let mut ip = [192, 168, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
         let original = ip;
         ipcrypt.encrypt_ip16(&mut ip);
@@ -628,7 +610,7 @@ mod tests {
     #[test]
     fn test_ip_str_encrypt_decrypt() {
         let key = [0u8; Ipcrypt::KEY_BYTES];
-        let ipcrypt = Ipcrypt::new(&key);
+        let ipcrypt = Ipcrypt::new(key);
         let ip = "192.168.1.1";
         let encrypted = ipcrypt.encrypt_ip_str(ip).expect("Encryption failed");
         let decrypted = ipcrypt
@@ -640,7 +622,7 @@ mod tests {
     #[test]
     fn test_nd_ip16_encrypt_decrypt() {
         let key = [0u8; Ipcrypt::KEY_BYTES];
-        let ipcrypt = Ipcrypt::new(&key);
+        let ipcrypt = Ipcrypt::new(key);
         let ip: [u8; 16] = [10, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
         let nd_encrypted = ipcrypt.nd_encrypt_ip16(&ip);
         let decrypted = ipcrypt.nd_decrypt_ip16(&nd_encrypted);
@@ -650,7 +632,7 @@ mod tests {
     #[test]
     fn test_nd_ip_str_encrypt_decrypt() {
         let key = [0u8; Ipcrypt::KEY_BYTES];
-        let ipcrypt = Ipcrypt::new(&key);
+        let ipcrypt = Ipcrypt::new(key);
         let ip = "10.0.0.1";
         let nd_encrypted = ipcrypt.nd_encrypt_ip_str(ip).expect("ND Encryption failed");
         let nd_decrypted = ipcrypt
@@ -670,7 +652,7 @@ mod tests {
     #[test]
     fn test_encrypt_decrypt_ipaddr() {
         let key = [0u8; Ipcrypt::KEY_BYTES];
-        let ipcrypt = Ipcrypt::new(&key);
+        let ipcrypt = Ipcrypt::new(key);
 
         // Test IPv4
         let ip_v4 = IpAddr::V4(Ipv4Addr::new(192, 168, 1, 1));
@@ -692,7 +674,7 @@ mod tests {
     #[test]
     fn test_nd_encrypt_decrypt_ipaddr() {
         let key = [0u8; Ipcrypt::KEY_BYTES];
-        let ipcrypt = Ipcrypt::new(&key);
+        let ipcrypt = Ipcrypt::new(key);
 
         // Test IPv4
         let ip_v4 = IpAddr::V4(Ipv4Addr::new(10, 0, 0, 1));
@@ -718,7 +700,7 @@ mod tests {
     #[test]
     fn test_nd_ipaddr_str_encrypt_decrypt() {
         let key = [0u8; Ipcrypt::KEY_BYTES];
-        let ipcrypt = Ipcrypt::new(&key);
+        let ipcrypt = Ipcrypt::new(key);
         let ip = IpAddr::V4(Ipv4Addr::new(10, 0, 0, 1));
         let nd_encrypted = ipcrypt
             .nd_encrypt_ipaddr_str(ip)
@@ -732,7 +714,7 @@ mod tests {
     #[test]
     fn test_nxd_encrypt_decrypt_ipaddr() {
         let key = [0u8; IpcryptNdx::KEY_BYTES];
-        let ipcrypt = IpcryptNdx::new(&key);
+        let ipcrypt = IpcryptNdx::new(key);
 
         // Test IPv4
         let ip_v4 = IpAddr::V4(Ipv4Addr::new(10, 0, 0, 1));
@@ -758,7 +740,7 @@ mod tests {
     #[test]
     fn test_ndx_ipaddr_str_encrypt_decrypt() {
         let key = [0u8; IpcryptNdx::KEY_BYTES];
-        let ipcrypt = IpcryptNdx::new(&key);
+        let ipcrypt = IpcryptNdx::new(key);
         let ip = IpAddr::V4(Ipv4Addr::new(10, 0, 0, 1));
         let nd_encrypted = ipcrypt
             .nd_encrypt_ipaddr_str(ip)
