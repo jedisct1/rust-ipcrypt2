@@ -33,7 +33,7 @@ Below is an example demonstrating both deterministic (format-preserving) and non
 
 ```rust
 use std::net::{IpAddr, Ipv4Addr};
-use ipcrypt2::{Ipcrypt, IPCRYPT_KEYBYTES};
+use ipcrypt2::Ipcrypt;
 
 // Create a secret key with the required length.
 let key = Ipcrypt::random_key();

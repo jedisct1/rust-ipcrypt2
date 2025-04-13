@@ -8,33 +8,6 @@ pub mod reexports {
     pub use getrandom;
 }
 
-/// The number of bytes in the key used for encryption/decryption.
-pub const IPCRYPT_KEYBYTES: usize = 16;
-
-/// The number of bytes in the tweak used for encryption/decryption.
-pub const IPCRYPT_TWEAKBYTES: usize = 8;
-
-/// The maximum number of bytes in the encrypted IP string.
-pub const IPCRYPT_MAX_IP_STR_BYTES: usize = 46;
-
-/// The maximum number of bytes in the encrypted IP string (including null terminator).
-pub const IPCRYPT_NDIP_BYTES: usize = 24;
-
-/// The maximum number of bytes in the encrypted IP string (including null terminator).
-pub const IPCRYPT_NDIP_STR_BYTES: usize = 48 + 1;
-
-/// The maximum number of bytes in the encrypted IP string (including null terminator) in NDX mode.
-pub const IPCRYPT_NDX_KEYBYTES: usize = 32;
-
-/// The number of bytes in the tweak used for encryption/decryption in NDX mode.
-pub const IPCRYPT_NDX_TWEAKBYTES: usize = 16;
-
-/// The maximum number of bytes in the encrypted IP string (including null terminator) in NDX mode.
-pub const IPCRYPT_NDX_NDIP_BYTES: usize = 32;
-
-/// The maximum number of bytes in the encrypted IP string (including null terminator) in NDX mode.
-pub const IPCRYPT_NDX_NDIP_STR_BYTES: usize = 64 + 1;
-
 #[repr(C)]
 pub struct IPCrypt {
     opaque: [u8; 16 * 11],
@@ -121,9 +94,21 @@ pub struct Ipcrypt {
 }
 
 impl Ipcrypt {
+    /// The number of bytes in the key used for encryption/decryption.
+    pub const IPCRYPT_KEYBYTES: usize = 16;
+
+    /// The number of bytes in the tweak used for encryption/decryption.
+    pub const IPCRYPT_TWEAKBYTES: usize = 8;
+
+    /// The maximum number of bytes in the encrypted IP string (including null terminator).
+    pub const IPCRYPT_NDIP_BYTES: usize = 24;
+
+    /// The maximum number of bytes in the encrypted IP string (including null terminator).
+    pub const IPCRYPT_NDIP_STR_BYTES: usize = 48 + 1;
+
     /// Creates a random key for the Ipcrypt instance.
-    pub fn random_key() -> [u8; IPCRYPT_KEYBYTES] {
-        let mut key = [0u8; IPCRYPT_KEYBYTES];
+    pub fn random_key() -> [u8; Self::IPCRYPT_KEYBYTES] {
+        let mut key = [0u8; Self::IPCRYPT_KEYBYTES];
         getrandom::fill(&mut key).expect("Failed to fill random bytes");
         key
     }
@@ -135,9 +120,9 @@ impl Ipcrypt {
     /// Panics if the key length is not equal to IPCRYPT_KEYBYTES.
     pub fn new(key: &[u8]) -> Self {
         assert!(
-            key.len() == IPCRYPT_KEYBYTES,
+            key.len() == Self::IPCRYPT_KEYBYTES,
             "Key must be {} bytes",
-            IPCRYPT_KEYBYTES
+            Self::IPCRYPT_KEYBYTES
         );
         let mut inner = std::mem::MaybeUninit::<IPCrypt>::uninit();
         unsafe {
@@ -213,10 +198,10 @@ impl Ipcrypt {
     /// Non-deterministically encrypts a 16-byte IP address.
     ///
     /// Returns a 24-byte encrypted value.
-    pub fn nd_encrypt_ip16(&self, ip: &[u8; 16]) -> [u8; IPCRYPT_NDIP_BYTES] {
-        let mut random = [0u8; IPCRYPT_TWEAKBYTES];
+    pub fn nd_encrypt_ip16(&self, ip: &[u8; 16]) -> [u8; Self::IPCRYPT_NDIP_BYTES] {
+        let mut random = [0u8; Self::IPCRYPT_TWEAKBYTES];
         getrandom::fill(&mut random).expect("Failed to fill random bytes");
-        let mut ndip = [0u8; IPCRYPT_NDIP_BYTES];
+        let mut ndip = [0u8; Self::IPCRYPT_NDIP_BYTES];
         unsafe {
             ipcrypt_nd_encrypt_ip16(&self.inner, ndip.as_mut_ptr(), ip.as_ptr(), random.as_ptr());
         }
@@ -226,7 +211,7 @@ impl Ipcrypt {
     /// Non-deterministically decrypts a 24-byte encrypted IP address.
     ///
     /// Returns the decrypted 16-byte IP address.
-    pub fn nd_decrypt_ip16(&self, ndip: &[u8; IPCRYPT_NDIP_BYTES]) -> [u8; 16] {
+    pub fn nd_decrypt_ip16(&self, ndip: &[u8; Self::IPCRYPT_NDIP_BYTES]) -> [u8; 16] {
         let mut ip = [0u8; 16];
         unsafe {
             ipcrypt_nd_decrypt_ip16(&self.inner, ip.as_mut_ptr(), ndip.as_ptr());
@@ -239,9 +224,9 @@ impl Ipcrypt {
     /// Returns a hex-encoded string.
     pub fn nd_encrypt_ip_str(&self, ip: &str) -> Result<String, IpcryptError> {
         let c_ip = CString::new(ip).map_err(|_| IpcryptError::NullByteInInput)?;
-        let mut random = [0u8; IPCRYPT_TWEAKBYTES];
+        let mut random = [0u8; Self::IPCRYPT_TWEAKBYTES];
         getrandom::fill(&mut random).map_err(|_| IpcryptError::OperationFailed)?;
-        let mut buffer = [0u8; IPCRYPT_NDIP_STR_BYTES];
+        let mut buffer = [0u8; Self::IPCRYPT_NDIP_STR_BYTES];
         let ret = unsafe {
             ipcrypt_nd_encrypt_ip_str(
                 &self.inner,
@@ -341,7 +326,10 @@ impl Ipcrypt {
     /// Non-deterministically encrypts an `IpAddr` using the IP string interface.
     ///
     /// Returns the encrypted IP as an `IpAddr`.
-    pub fn nd_encrypt_ipaddr(&self, ip: IpAddr) -> Result<[u8; IPCRYPT_NDIP_BYTES], IpcryptError> {
+    pub fn nd_encrypt_ipaddr(
+        &self,
+        ip: IpAddr,
+    ) -> Result<[u8; Self::IPCRYPT_NDIP_BYTES], IpcryptError> {
         let ip_str = ipaddr_to_ip16(ip);
         let encrypted = self.nd_encrypt_ip16(&ip_str);
         Ok(encrypted)
@@ -352,7 +340,7 @@ impl Ipcrypt {
     /// Returns the original `IpAddr` on success.
     pub fn nd_decrypt_ipaddr(
         &self,
-        encrypted: [u8; IPCRYPT_NDIP_BYTES],
+        encrypted: [u8; Self::IPCRYPT_NDIP_BYTES],
     ) -> Result<IpAddr, IpcryptError> {
         let decrypted = self.nd_decrypt_ip16(&encrypted);
         let decrypted_ip = ip16_to_ipaddr(decrypted)?;
@@ -400,9 +388,21 @@ pub struct IpcryptNdx {
 }
 
 impl IpcryptNdx {
+    /// The maximum number of bytes in the encrypted IP string (including null terminator) in NDX mode.
+    pub const IPCRYPT_NDX_KEYBYTES: usize = 32;
+
+    /// The number of bytes in the tweak used for encryption/decryption in NDX mode.
+    pub const IPCRYPT_NDX_TWEAKBYTES: usize = 16;
+
+    /// The maximum number of bytes in the encrypted IP string (including null terminator) in NDX mode.
+    pub const IPCRYPT_NDX_NDIP_BYTES: usize = 32;
+
+    /// The maximum number of bytes in the encrypted IP string (including null terminator) in NDX mode.
+    pub const IPCRYPT_NDX_NDIP_STR_BYTES: usize = 64 + 1;
+
     /// Creates a random key for the Ipcrypt instance.
-    pub fn random_key() -> [u8; IPCRYPT_NDX_KEYBYTES] {
-        let mut key = [0u8; IPCRYPT_NDX_KEYBYTES];
+    pub fn random_key() -> [u8; Self::IPCRYPT_NDX_KEYBYTES] {
+        let mut key = [0u8; Self::IPCRYPT_NDX_KEYBYTES];
         getrandom::fill(&mut key).expect("Failed to fill random bytes");
         key
     }
@@ -414,9 +414,9 @@ impl IpcryptNdx {
     /// Panics if the key length is not equal to IPCRYPT_KEYBYTES.
     pub fn new(key: &[u8]) -> Self {
         assert!(
-            key.len() == IPCRYPT_NDX_KEYBYTES,
+            key.len() == Self::IPCRYPT_NDX_KEYBYTES,
             "Key must be {} bytes",
-            IPCRYPT_NDX_KEYBYTES
+            Self::IPCRYPT_NDX_KEYBYTES
         );
         let mut inner = std::mem::MaybeUninit::<IPCryptNDX>::uninit();
         unsafe {
@@ -430,10 +430,10 @@ impl IpcryptNdx {
     /// Non-deterministically encrypts a 16-byte IP address.
     ///
     /// Returns a 24-byte encrypted value.
-    pub fn nd_encrypt_ip16(&self, ip: &[u8; 16]) -> [u8; IPCRYPT_NDX_NDIP_BYTES] {
-        let mut random = [0u8; IPCRYPT_NDX_TWEAKBYTES];
+    pub fn nd_encrypt_ip16(&self, ip: &[u8; 16]) -> [u8; Self::IPCRYPT_NDX_NDIP_BYTES] {
+        let mut random = [0u8; Self::IPCRYPT_NDX_TWEAKBYTES];
         getrandom::fill(&mut random).expect("Failed to fill random bytes");
-        let mut ndip = [0u8; IPCRYPT_NDX_NDIP_BYTES];
+        let mut ndip = [0u8; Self::IPCRYPT_NDX_NDIP_BYTES];
         unsafe {
             ipcrypt_ndx_encrypt_ip16(&self.inner, ndip.as_mut_ptr(), ip.as_ptr(), random.as_ptr());
         }
@@ -443,7 +443,7 @@ impl IpcryptNdx {
     /// Non-deterministically decrypts a 24-byte encrypted IP address.
     ///
     /// Returns the decrypted 16-byte IP address.
-    pub fn nd_decrypt_ip16(&self, ndip: &[u8; IPCRYPT_NDX_NDIP_BYTES]) -> [u8; 16] {
+    pub fn nd_decrypt_ip16(&self, ndip: &[u8; Self::IPCRYPT_NDX_NDIP_BYTES]) -> [u8; 16] {
         let mut ip = [0u8; 16];
         unsafe {
             ipcrypt_ndx_decrypt_ip16(&self.inner, ip.as_mut_ptr(), ndip.as_ptr());
@@ -456,9 +456,9 @@ impl IpcryptNdx {
     /// Returns a hex-encoded string.
     pub fn nd_encrypt_ip_str(&self, ip: &str) -> Result<String, IpcryptError> {
         let c_ip = CString::new(ip).map_err(|_| IpcryptError::NullByteInInput)?;
-        let mut random = [0u8; IPCRYPT_NDX_TWEAKBYTES];
+        let mut random = [0u8; Self::IPCRYPT_NDX_TWEAKBYTES];
         getrandom::fill(&mut random).map_err(|_| IpcryptError::OperationFailed)?;
-        let mut buffer = [0u8; IPCRYPT_NDX_NDIP_STR_BYTES];
+        let mut buffer = [0u8; Self::IPCRYPT_NDX_NDIP_STR_BYTES];
         let ret = unsafe {
             ipcrypt_ndx_encrypt_ip_str(
                 &self.inner,
@@ -510,7 +510,7 @@ impl IpcryptNdx {
     pub fn nd_encrypt_ipaddr(
         &self,
         ip: IpAddr,
-    ) -> Result<[u8; IPCRYPT_NDX_NDIP_BYTES], IpcryptError> {
+    ) -> Result<[u8; Self::IPCRYPT_NDX_NDIP_BYTES], IpcryptError> {
         let ip_str = ipaddr_to_ip16(ip);
         let encrypted = self.nd_encrypt_ip16(&ip_str);
         Ok(encrypted)
@@ -521,7 +521,7 @@ impl IpcryptNdx {
     /// Returns the original `IpAddr` on success.
     pub fn nd_decrypt_ipaddr(
         &self,
-        encrypted: [u8; IPCRYPT_NDX_NDIP_BYTES],
+        encrypted: [u8; Self::IPCRYPT_NDX_NDIP_BYTES],
     ) -> Result<IpAddr, IpcryptError> {
         let decrypted = self.nd_decrypt_ip16(&encrypted);
         let decrypted_ip = ip16_to_ipaddr(decrypted)?;
@@ -571,6 +571,9 @@ pub fn str_to_ip16(ip: &str) -> Result<[u8; 16], IpcryptError> {
     }
 }
 
+/// The maximum number of bytes in the encrypted IP string.
+pub const IPCRYPT_MAX_IP_STR_BYTES: usize = 46;
+
 /// Converts a 16-byte binary IP address into a string.
 ///
 /// Returns the IP string on success.
@@ -618,7 +621,7 @@ mod tests {
 
     #[test]
     fn test_ip16_encrypt_decrypt() {
-        let key = [0u8; IPCRYPT_KEYBYTES];
+        let key = [0u8; Ipcrypt::IPCRYPT_KEYBYTES];
         let ipcrypt = Ipcrypt::new(&key);
         let mut ip = [192, 168, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
         let original = ip;
@@ -630,7 +633,7 @@ mod tests {
 
     #[test]
     fn test_ip_str_encrypt_decrypt() {
-        let key = [0u8; IPCRYPT_KEYBYTES];
+        let key = [0u8; Ipcrypt::IPCRYPT_KEYBYTES];
         let ipcrypt = Ipcrypt::new(&key);
         let ip = "192.168.1.1";
         let encrypted = ipcrypt.encrypt_ip_str(ip).expect("Encryption failed");
@@ -642,7 +645,7 @@ mod tests {
 
     #[test]
     fn test_nd_ip16_encrypt_decrypt() {
-        let key = [0u8; IPCRYPT_KEYBYTES];
+        let key = [0u8; Ipcrypt::IPCRYPT_KEYBYTES];
         let ipcrypt = Ipcrypt::new(&key);
         let ip: [u8; 16] = [10, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
         let nd_encrypted = ipcrypt.nd_encrypt_ip16(&ip);
@@ -652,7 +655,7 @@ mod tests {
 
     #[test]
     fn test_nd_ip_str_encrypt_decrypt() {
-        let key = [0u8; IPCRYPT_KEYBYTES];
+        let key = [0u8; Ipcrypt::IPCRYPT_KEYBYTES];
         let ipcrypt = Ipcrypt::new(&key);
         let ip = "10.0.0.1";
         let nd_encrypted = ipcrypt.nd_encrypt_ip_str(ip).expect("ND Encryption failed");
@@ -672,7 +675,7 @@ mod tests {
 
     #[test]
     fn test_encrypt_decrypt_ipaddr() {
-        let key = [0u8; IPCRYPT_KEYBYTES];
+        let key = [0u8; Ipcrypt::IPCRYPT_KEYBYTES];
         let ipcrypt = Ipcrypt::new(&key);
 
         // Test IPv4
@@ -694,7 +697,7 @@ mod tests {
 
     #[test]
     fn test_nd_encrypt_decrypt_ipaddr() {
-        let key = [0u8; IPCRYPT_KEYBYTES];
+        let key = [0u8; Ipcrypt::IPCRYPT_KEYBYTES];
         let ipcrypt = Ipcrypt::new(&key);
 
         // Test IPv4
@@ -720,7 +723,7 @@ mod tests {
 
     #[test]
     fn test_nd_ipaddr_str_encrypt_decrypt() {
-        let key = [0u8; IPCRYPT_KEYBYTES];
+        let key = [0u8; Ipcrypt::IPCRYPT_KEYBYTES];
         let ipcrypt = Ipcrypt::new(&key);
         let ip = IpAddr::V4(Ipv4Addr::new(10, 0, 0, 1));
         let nd_encrypted = ipcrypt
@@ -734,7 +737,7 @@ mod tests {
 
     #[test]
     fn test_nxd_encrypt_decrypt_ipaddr() {
-        let key = [0u8; IPCRYPT_NDX_KEYBYTES];
+        let key = [0u8; IpcryptNdx::IPCRYPT_NDX_KEYBYTES];
         let ipcrypt = IpcryptNdx::new(&key);
 
         // Test IPv4
@@ -760,7 +763,7 @@ mod tests {
 
     #[test]
     fn test_ndx_ipaddr_str_encrypt_decrypt() {
-        let key = [0u8; IPCRYPT_NDX_KEYBYTES];
+        let key = [0u8; IpcryptNdx::IPCRYPT_NDX_KEYBYTES];
         let ipcrypt = IpcryptNdx::new(&key);
         let ip = IpAddr::V4(Ipv4Addr::new(10, 0, 0, 1));
         let nd_encrypted = ipcrypt
