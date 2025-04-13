@@ -7,7 +7,7 @@ use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
 use std::os::raw::{c_char, c_int};
 
 pub mod reexports {
-    pub use getrandom;
+    pub use rand;
 }
 
 #[repr(C)]
@@ -163,9 +163,7 @@ impl Ipcrypt {
     /// let ipcrypt = Ipcrypt::new(key);
     /// ```
     pub fn generate_key() -> [u8; Self::KEY_BYTES] {
-        let mut key = [0u8; Self::KEY_BYTES];
-        getrandom::fill(&mut key).expect("Failed to fill random bytes");
-        key
+        rand::random()
     }
 
     /// Creates a new Ipcrypt instance with the given key.
@@ -268,8 +266,7 @@ impl Ipcrypt {
     ///
     /// Returns a 24-byte encrypted value.
     pub fn nd_encrypt_ip16(&self, ip: &[u8; 16]) -> [u8; Self::NDIP_BYTES] {
-        let mut random = [0u8; Self::TWEAK_BYTES];
-        getrandom::fill(&mut random).expect("Failed to fill random bytes");
+        let random: [u8; Self::TWEAK_BYTES] = rand::random();
         let mut ndip = [0u8; Self::NDIP_BYTES];
         unsafe {
             ipcrypt_nd_encrypt_ip16(&self.inner, ndip.as_mut_ptr(), ip.as_ptr(), random.as_ptr());
@@ -293,8 +290,7 @@ impl Ipcrypt {
     /// Returns a hex-encoded string.
     pub fn nd_encrypt_ip_str(&self, ip: &str) -> Result<String, IpcryptError> {
         let c_ip = CString::new(ip).map_err(|_| IpcryptError::NullByteInInput)?;
-        let mut random = [0u8; Self::TWEAK_BYTES];
-        getrandom::fill(&mut random).map_err(|_| IpcryptError::OperationFailed)?;
+        let random: [u8; Self::TWEAK_BYTES] = rand::random();
         let mut buffer = [0u8; Self::NDIP_STR_BYTES];
         let ret = unsafe {
             ipcrypt_nd_encrypt_ip_str(
@@ -683,9 +679,7 @@ impl IpcryptNdx {
 
     /// Creates a random key for the Ipcrypt instance.
     pub fn generate_key() -> [u8; Self::KEY_BYTES] {
-        let mut key = [0u8; Self::KEY_BYTES];
-        getrandom::fill(&mut key).expect("Failed to fill random bytes");
-        key
+        rand::random()
     }
 
     /// Creates a new Ipcrypt instance with the given secret key.
@@ -703,8 +697,7 @@ impl IpcryptNdx {
     ///
     /// Returns a 24-byte encrypted value.
     pub fn nd_encrypt_ip16(&self, ip: &[u8; 16]) -> [u8; Self::NDIP_BYTES] {
-        let mut random = [0u8; Self::TWEAK_BYTES];
-        getrandom::fill(&mut random).expect("Failed to fill random bytes");
+        let random: [u8; Self::TWEAK_BYTES] = rand::random();
         let mut ndip = [0u8; Self::NDIP_BYTES];
         unsafe {
             ipcrypt_ndx_encrypt_ip16(&self.inner, ndip.as_mut_ptr(), ip.as_ptr(), random.as_ptr());
@@ -728,8 +721,7 @@ impl IpcryptNdx {
     /// Returns a hex-encoded string.
     pub fn nd_encrypt_ip_str(&self, ip: &str) -> Result<String, IpcryptError> {
         let c_ip = CString::new(ip).map_err(|_| IpcryptError::NullByteInInput)?;
-        let mut random = [0u8; Self::TWEAK_BYTES];
-        getrandom::fill(&mut random).map_err(|_| IpcryptError::OperationFailed)?;
+        let random: [u8; Self::TWEAK_BYTES] = rand::random();
         let mut buffer = [0u8; Self::NDIP_STR_BYTES];
         let ret = unsafe {
             ipcrypt_ndx_encrypt_ip_str(

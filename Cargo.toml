@@ -16,18 +16,13 @@ Supports both deterministic and non-deterministic encryption modes.
 readme = "README.md"
 
 [dependencies]
-[target.'cfg(all(any(target_arch = "wasm32", target_arch = "wasm64"), target_os = "unknown"))'.dependencies]
-getrandom = { version = "0.3", features = ["wasm_js"] }
-
-[target.'cfg(not(all(any(target_arch = "wasm32", target_arch = "wasm64"), target_os = "unknown")))'.dependencies]
-getrandom = { version = "0.3" }
+rand = "0.9"
 
 [build-dependencies]
 cc = "1.2"
 
 [dev-dependencies]
 criterion = "0.5"
-rand = "0.9"
 
 [[bench]]
 name = "bench"

@@ -9,23 +9,23 @@ fn deterministic_encryption_benchmark(c: &mut Criterion) {
     let ipv6 = IpAddr::V6(Ipv6Addr::new(0x2001, 0xdb8, 0, 0, 0, 0, 0, 1));
 
     // String-based encryption
-    group.bench_function("IPv4 Encrypt", |b| {
+    group.bench_function("IPv4 String Encrypt", |b| {
         b.iter(|| {
             black_box(ipcrypt.encrypt_ip_str(black_box("192.168.1.1")).unwrap());
         })
     });
-    group.bench_function("IPv4 Decrypt", |b| {
+    group.bench_function("IPv4 String Decrypt", |b| {
         let encrypted = ipcrypt.encrypt_ip_str("192.168.1.1").unwrap();
         b.iter(|| {
             black_box(ipcrypt.decrypt_ip_str(black_box(&encrypted)).unwrap());
         })
     });
-    group.bench_function("IPv6 Encrypt", |b| {
+    group.bench_function("IPv6 String Encrypt", |b| {
         b.iter(|| {
             black_box(ipcrypt.encrypt_ip_str(black_box("2001:db8::1")).unwrap());
         })
     });
-    group.bench_function("IPv6 Decrypt", |b| {
+    group.bench_function("IPv6 String Decrypt", |b| {
         let encrypted = ipcrypt.encrypt_ip_str("2001:db8::1").unwrap();
         b.iter(|| {
             black_box(ipcrypt.decrypt_ip_str(black_box(&encrypted)).unwrap());
@@ -33,23 +33,23 @@ fn deterministic_encryption_benchmark(c: &mut Criterion) {
     });
 
     // Raw IP address encryption
-    group.bench_function("IPv4 Encrypt", |b| {
+    group.bench_function("IPv4 Raw Encrypt", |b| {
         b.iter(|| {
             black_box(ipcrypt.encrypt_ipaddr(black_box(ipv4)).unwrap());
         })
     });
-    group.bench_function("IPv4 Decrypt", |b| {
+    group.bench_function("IPv4 Raw Decrypt", |b| {
         let encrypted = ipcrypt.encrypt_ipaddr(ipv4).unwrap();
         b.iter(|| {
             black_box(ipcrypt.decrypt_ipaddr(black_box(encrypted)).unwrap());
         })
     });
-    group.bench_function("IPv6 Encrypt", |b| {
+    group.bench_function("IPv6 Raw Encrypt", |b| {
         b.iter(|| {
             black_box(ipcrypt.encrypt_ipaddr(black_box(ipv6)).unwrap());
         })
     });
-    group.bench_function("IPv6 Decrypt", |b| {
+    group.bench_function("IPv6 Raw Decrypt", |b| {
         let encrypted = ipcrypt.encrypt_ipaddr(ipv6).unwrap();
         b.iter(|| {
             black_box(ipcrypt.decrypt_ipaddr(black_box(encrypted)).unwrap());
@@ -64,23 +64,23 @@ fn non_deterministic_encryption_benchmark(c: &mut Criterion) {
     let ipv6 = IpAddr::V6(Ipv6Addr::new(0x2001, 0xdb8, 0, 0, 0, 0, 0, 1));
 
     // String-based encryption
-    group.bench_function("IPv4 Encrypt", |b| {
+    group.bench_function("IPv4 String Encrypt", |b| {
         b.iter(|| {
             black_box(ipcrypt.nd_encrypt_ip_str(black_box("192.168.1.1")).unwrap());
         })
     });
-    group.bench_function("IPv4 Decrypt", |b| {
+    group.bench_function("IPv4 String Decrypt", |b| {
         let encrypted = ipcrypt.nd_encrypt_ip_str("192.168.1.1").unwrap();
         b.iter(|| {
             black_box(ipcrypt.nd_decrypt_ip_str(black_box(&encrypted)).unwrap());
         })
     });
-    group.bench_function("IPv6 Encrypt", |b| {
+    group.bench_function("IPv6 String Encrypt", |b| {
         b.iter(|| {
             black_box(ipcrypt.nd_encrypt_ip_str(black_box("2001:db8::1")).unwrap());
         })
     });
-    group.bench_function("IPv6 Decrypt", |b| {
+    group.bench_function("IPv6 String Decrypt", |b| {
         let encrypted = ipcrypt.nd_encrypt_ip_str("2001:db8::1").unwrap();
         b.iter(|| {
             black_box(ipcrypt.nd_decrypt_ip_str(black_box(&encrypted)).unwrap());
@@ -88,23 +88,23 @@ fn non_deterministic_encryption_benchmark(c: &mut Criterion) {
     });
 
     // Raw IP address encryption
-    group.bench_function("IPv4 ND Encrypt", |b| {
+    group.bench_function("IPv4 Raw Encrypt", |b| {
         b.iter(|| {
             black_box(ipcrypt.nd_encrypt_ipaddr(black_box(ipv4)).unwrap());
         })
     });
-    group.bench_function("IPv4 ND Decrypt", |b| {
+    group.bench_function("IPv4 Raw Decrypt", |b| {
         let encrypted = ipcrypt.nd_encrypt_ipaddr(ipv4).unwrap();
         b.iter(|| {
             black_box(ipcrypt.nd_decrypt_ipaddr(black_box(encrypted)).unwrap());
         })
     });
-    group.bench_function("IPv6 ND Encrypt", |b| {
+    group.bench_function("IPv6 Raw Encrypt", |b| {
         b.iter(|| {
             black_box(ipcrypt.nd_encrypt_ipaddr(black_box(ipv6)).unwrap());
         })
     });
-    group.bench_function("IPv6 ND Decrypt", |b| {
+    group.bench_function("IPv6 Raw Decrypt", |b| {
         let encrypted = ipcrypt.nd_encrypt_ipaddr(ipv6).unwrap();
         b.iter(|| {
             black_box(ipcrypt.nd_decrypt_ipaddr(black_box(encrypted)).unwrap());
@@ -119,7 +119,7 @@ fn ndx_encryption_benchmark(c: &mut Criterion) {
     let ipv6 = IpAddr::V6(Ipv6Addr::new(0x2001, 0xdb8, 0, 0, 0, 0, 0, 1));
 
     // String-based encryption
-    group.bench_function("IPv4 Encrypt", |b| {
+    group.bench_function("IPv4 String Encrypt", |b| {
         b.iter(|| {
             black_box(
                 ipcrypt_ndx
@@ -128,7 +128,7 @@ fn ndx_encryption_benchmark(c: &mut Criterion) {
             );
         })
     });
-    group.bench_function("IPv4 Decrypt", |b| {
+    group.bench_function("IPv4 String Decrypt", |b| {
         let encrypted = ipcrypt_ndx.nd_encrypt_ip_str("192.168.1.1").unwrap();
         b.iter(|| {
             black_box(
@@ -138,7 +138,7 @@ fn ndx_encryption_benchmark(c: &mut Criterion) {
             );
         })
     });
-    group.bench_function("IPv6 Encrypt", |b| {
+    group.bench_function("IPv6 String Encrypt", |b| {
         b.iter(|| {
             black_box(
                 ipcrypt_ndx
@@ -147,7 +147,7 @@ fn ndx_encryption_benchmark(c: &mut Criterion) {
             );
         })
     });
-    group.bench_function("IPv6 Decrypt", |b| {
+    group.bench_function("IPv6 String Decrypt", |b| {
         let encrypted = ipcrypt_ndx.nd_encrypt_ip_str("2001:db8::1").unwrap();
         b.iter(|| {
             black_box(
@@ -159,23 +159,23 @@ fn ndx_encryption_benchmark(c: &mut Criterion) {
     });
 
     // Raw IP address encryption
-    group.bench_function("IPv4 NDX Encrypt", |b| {
+    group.bench_function("IPv4 Raw Encrypt", |b| {
         b.iter(|| {
             black_box(ipcrypt_ndx.nd_encrypt_ipaddr(black_box(ipv4)).unwrap());
         })
     });
-    group.bench_function("IPv4 NDX Decrypt", |b| {
+    group.bench_function("IPv4 Raw Decrypt", |b| {
         let encrypted = ipcrypt_ndx.nd_encrypt_ipaddr(ipv4).unwrap();
         b.iter(|| {
             black_box(ipcrypt_ndx.nd_decrypt_ipaddr(black_box(encrypted)).unwrap());
         })
     });
-    group.bench_function("IPv6 NDX Encrypt", |b| {
+    group.bench_function("IPv6 Raw Encrypt", |b| {
         b.iter(|| {
             black_box(ipcrypt_ndx.nd_encrypt_ipaddr(black_box(ipv6)).unwrap());
         })
     });
-    group.bench_function("IPv6 NDX Decrypt", |b| {
+    group.bench_function("IPv6 Raw Decrypt", |b| {
         let encrypted = ipcrypt_ndx.nd_encrypt_ipaddr(ipv6).unwrap();
         b.iter(|| {
             black_box(ipcrypt_ndx.nd_decrypt_ipaddr(black_box(encrypted)).unwrap());
