@@ -7,8 +7,11 @@
 - **Deterministic (Format-Preserving) Encryption/Decryption:**
   Encrypt and decrypt IP addresses in a way that preserves their format. The output remains a valid IP address.
 
-- **Non-Deterministic Encryption/Decryption:**
-  For increased privacy, non-deterministic encryption produces a compact 24-byte array (or its hex string representation) instead of an IP address. This mode uses random tweaks, so the same input will yield different outputs on each encryption.
+- **Non-Deterministic Encryption/Decryption (KIASU-BC):**
+  For increased privacy, non-deterministic encryption produces a compact 24-byte array (or its hex string representation) instead of an IP address. This mode uses 8-byte random tweaks, so the same input will yield different outputs on each encryption.
+
+- **NDX Mode: Non-Deterministic Encryption with Extended Tweaks (AES-XTX):**
+  Similar to the non-deterministic mode but uses 16-byte tweaks for higher usage limits before collisions occur. Produces 32-byte encrypted values (or 64-character hex strings). This mode runs at half the speed of the regular non-deterministic mode.
 
 - **IP Conversion Utilities:**
   Seamlessly convert between `std::net::IpAddr`, 16-byte binary representations, and IP strings. IPv4 addresses are automatically converted to IPv4‑mapped IPv6 format when needed.
@@ -29,17 +32,19 @@ ipcrypt2 = "0.1"  # Replace with the latest version
 
 The [ipcrypt2 API documentation](https://docs.rs/ipcrypt2) is available on `docs.rs`.
 
-Below is an example demonstrating both deterministic (format-preserving) and non-deterministic encryption modes:
+Below is an example demonstrating all three encryption modes:
 
 ```rust
 use std::net::{IpAddr, Ipv4Addr};
-use ipcrypt2::Ipcrypt;
+use ipcrypt2::{Ipcrypt, IpcryptNdx};
 
-// Create a secret key with the required length.
+// Create secret keys with the required lengths.
 let key = Ipcrypt::random_key();
+let ndx_key = IpcryptNdx::random_key();
 
-// Initialize the ipcrypt2 context.
+// Initialize the ipcrypt2 contexts.
 let ipcrypt = Ipcrypt::new(&key);
+let ipcrypt_ndx = IpcryptNdx::new(&ndx_key);
 
 // --- Deterministic (Format-Preserving) Mode ---
 // Encrypting an IP address preserves its format.
@@ -52,7 +57,7 @@ let decrypted_ip = ipcrypt.decrypt_ipaddr(encrypted_ip)
     .expect("IP decryption failed");
 println!("Decrypted IP: {}", decrypted_ip);
 
-// --- Non-Deterministic Mode ---
+// --- Non-Deterministic Mode (KIASU-BC) ---
 // Non-deterministic encryption produces a compact 24-byte array (or hex string).
 let ip_str = "10.0.0.1";
 let nd_encrypted = ipcrypt.nd_encrypt_ip_str(ip_str)
@@ -62,16 +67,29 @@ println!("Non-Deterministically Encrypted IP String: {}", nd_encrypted);
 let nd_decrypted = ipcrypt.nd_decrypt_ip_str(&nd_encrypted)
     .expect("Non-deterministic decryption failed");
 println!("Non-Deterministically Decrypted IP String: {}", nd_decrypted);
+
+// --- NDX Mode (AES-XTX) ---
+// NDX mode uses 16-byte tweaks and produces 32-byte encrypted values.
+let ndx_encrypted = ipcrypt_ndx.nd_encrypt_ip_str(ip_str)
+    .expect("NDX encryption failed");
+println!("NDX Encrypted IP String: {}", ndx_encrypted);
+
+let ndx_decrypted = ipcrypt_ndx.nd_decrypt_ip_str(&ndx_encrypted)
+    .expect("NDX decryption failed");
+println!("NDX Decrypted IP String: {}", ndx_decrypted);
 ```
 
 ## API Overview
 
-The primary interface is provided by the `Ipcrypt` struct, which exposes several functionalities:
+The primary interfaces are provided by the `Ipcrypt` and `IpcryptNdx` structs, which expose several functionalities:
 
 ### Initialization
 
 - **`Ipcrypt::new(key: &[u8])`**
-  Creates a new instance with a secret key. The key must be exactly `KEY_BYTES` bytes long.
+  Creates a new instance with a secret key. The key must be exactly `KEY_BYTES` (16) bytes long.
+
+- **`IpcryptNdx::new(key: &[u8])`**
+  Creates a new NDX instance with a secret key. The key must be exactly `KEY_BYTES` (32) bytes long.
 
 ### Deterministic Methods (Format-Preserving)
 
@@ -84,7 +102,7 @@ The primary interface is provided by the `Ipcrypt` struct, which exposes several
 - **`encrypt_ipaddr(&self, ip: IpAddr)` / `decrypt_ipaddr(&self, encrypted: IpAddr)`**
   Encrypts and decrypts `std::net::IpAddr` types. The encrypted output is still a valid IP address, with IPv4 addresses represented in IPv4‑mapped IPv6 format.
 
-### Non-Deterministic Methods
+### Non-Deterministic Methods (KIASU-BC)
 
 - **`nd_encrypt_ip16(&self, ip: &[u8; 16])` / `nd_decrypt_ip16(&self, ndip: &[u8; NDIP_BYTES])`**
   Encrypts and decrypts 16-byte IP addresses non-deterministically, outputting a 24-byte encrypted array.
@@ -94,6 +112,17 @@ The primary interface is provided by the `Ipcrypt` struct, which exposes several
 
 - **`nd_encrypt_ipaddr_str(&self, ip: IpAddr)` / `nd_decrypt_ipaddr_str(&self, encrypted: &str)`**
   Encrypts an `IpAddr` to a non-deterministic hex string and converts it back upon decryption.
+
+### NDX Mode Methods (AES-XTX)
+
+- **`nd_encrypt_ip16(&self, ip: &[u8; 16])` / `nd_decrypt_ip16(&self, ndip: &[u8; NDIP_BYTES])`**
+  Encrypts and decrypts 16-byte IP addresses non-deterministically, outputting a 32-byte encrypted array.
+
+- **`nd_encrypt_ip_str(&self, ip: &str)` / `nd_decrypt_ip_str(&self, encrypted: &str)`**
+  Encrypts and decrypts IP address strings in NDX mode. The encrypted value is returned as a hex-encoded string.
+
+- **`nd_encrypt_ipaddr_str(&self, ip: IpAddr)` / `nd_decrypt_ipaddr_str(&self, encrypted: &str)`**
+  Encrypts an `IpAddr` to an NDX hex string and converts it back upon decryption.
 
 ### Conversion Utilities
 
