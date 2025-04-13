@@ -8,7 +8,7 @@ homepage = "https://github.com/jedisct1/rust-ipcrypt2"
 repository = "https://github.com/jedisct1/rust-ipcrypt2"
 documentation = "https://docs.rs/ipcrypt2"
 categories = ["cryptography", "wasm", "security", "no-std"]
-keywords = ["crypto", "ip", "address", "obfuscation", "privacy", "encryption", "aes"]
+keywords = ["crypto", "ip", "address", "obfuscation", "encryption"]
 description = """
 A Rust library for format-preserving encryption of IP addresses.
 Supports both deterministic and non-deterministic encryption modes.
