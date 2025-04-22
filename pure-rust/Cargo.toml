@@ -1,0 +1,18 @@
+[package]
+name = "ipcrypt-rs"
+version = "0.1.0"
+edition = "2021"
+authors = ["Frank Denis <github@pureftpd.org>"]
+description = "IP address encryption and obfuscation methods in pure Rust"
+repository = "https://github.com/jedisct1/rust-ipcrypt2"
+documentation = "https://docs.rs/ipcrypt-rs"
+readme = "README.md"
+license = "ISC"
+keywords = ["encryption", "privacy", "ip", "ipcrypt", "security"]
+categories = ["cryptography", "network-programming"]
+
+[dependencies]
+aes = { version = "0.8", features = ["hazmat"] }
+rand = "0.9"
+ct-codecs = "1.1"
+
