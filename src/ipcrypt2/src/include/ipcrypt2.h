@@ -8,6 +8,15 @@ extern "C" {
 #include <stddef.h>
 #include <stdint.h>
 
+/* System headers for socket structures */
+#if defined(_WIN32)
+#    include <winsock2.h>
+#else
+#    include <sys/types.h>
+/* <sys/types.h> must be included before <sys/socket.h> */
+#    include <sys/socket.h>
+#endif
+
 /** Size of the AES encryption key, in bytes (128 bits). */
 #define IPCRYPT_KEYBYTES 16U
 
@@ -48,6 +57,37 @@ int ipcrypt_str_to_ip16(uint8_t ip16[16], const char *ip_str);
  * Returns the length of the resulting string on success, or 0 on error.
  */
 size_t ipcrypt_ip16_to_str(char ip_str[IPCRYPT_MAX_IP_STR_BYTES], const uint8_t ip16[16]);
+
+/**
+ * Convert a socket address structure to a 16-byte binary IP representation.
+ *
+ * Supports both IPv4 (AF_INET) and IPv6 (AF_INET6) socket addresses.
+ * For IPv4 addresses, they are converted to IPv4-mapped IPv6 format.
+ *
+ * Returns 0 on success, or -1 if the address family is not supported.
+ */
+int ipcrypt_sockaddr_to_ip16(uint8_t ip16[16], const struct sockaddr *sa);
+
+/**
+ * Convert a 16-byte binary IP address to a socket address structure.
+ *
+ * The socket address structure is populated based on the IP format:
+ * - For IPv4-mapped IPv6 addresses, an IPv4 socket address is created
+ * - For other IPv6 addresses, an IPv6 socket address is created
+ *
+ * The provided sockaddr_storage structure is guaranteed to be large enough
+ * to hold any socket address type.
+ */
+void ipcrypt_ip16_to_sockaddr(struct sockaddr_storage *sa, const uint8_t ip16[16]);
+
+/**
+ * Convert a hexadecimal string to a secret key.
+ *
+ * The input string must be exactly 32 or 64 characters long (IPCRYPT_KEYBYTES or
+ * IPCRYPT_NDX_KEYBYTES bytes in hex). Returns 0 on success, or -1 if the input string is invalid or
+ * conversion fails.
+ */
+int ipcrypt_key_from_hex(uint8_t *key, size_t key_len, const char *hex, size_t hex_len);
 
 /* -------- IP encryption -------- */
 

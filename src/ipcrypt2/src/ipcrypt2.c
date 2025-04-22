@@ -23,7 +23,6 @@
  * - Minimal external dependencies; just compile and link.
  *
  * Limitations:
- * - Only works on platforms with AES-NI (x86_64) or ARM Crypto Extensions (aarch64).
  * - Not intended for general-purpose encryption—IP address only.
  * - Ensure keys are secret and tweak values are random or unique per encryption.
  */
@@ -36,6 +35,8 @@
 #    include <ws2tcpip.h>
 #else
 #    include <arpa/inet.h>
+#    include <netinet/in.h>
+#    include <sys/socket.h>
 #endif
 
 #include "include/ipcrypt2.h"
@@ -45,7 +46,7 @@
 
 #define COMPILER_ASSERT(X) (void) sizeof(char[(X) ? 1 : -1])
 
-#if !defined(MSC_VER) || _MSC_VER < 1800
+#if !defined(_MSC_VER) || _MSC_VER < 1800
 #    define __vectorcall
 #endif
 
@@ -57,7 +58,11 @@
 #        define __ARM_FEATURE_AES 1
 #    endif
 
-#    include <arm_neon.h>
+#    if defined(_MSC_VER) && defined(_M_ARM64)
+#        include <arm64_neon.h>
+#    else
+#        include <arm_neon.h>
+#    endif
 
 #    ifdef __clang__
 /**
@@ -160,7 +165,7 @@ AES_KEYGEN(BlockVec block_vec, const int rc)
 
 #else
 
-#    if defined(__x86_64__) || defined(__i386__)
+#    if defined(__x86_64__) || defined(__i386__) || defined(_M_X64) || defined(_M_IX86)
 
 #        ifdef __clang__
 /**
@@ -172,6 +177,14 @@ AES_KEYGEN(BlockVec block_vec, const int rc)
  * Enable AES/AVX instructions when compiling with GCC.
  */
 #            pragma GCC target("aes,sse4.1")
+#        elif defined(_MSC_VER)
+#            include <intrin.h>
+#            pragma intrinsic(_mm_aesenc_si128)
+#            pragma intrinsic(_mm_aesenclast_si128)
+#            pragma intrinsic(_mm_aesdec_si128)
+#            pragma intrinsic(_mm_aesdeclast_si128)
+#            pragma intrinsic(_mm_aesimc_si128)
+#            pragma intrinsic(_mm_aeskeygenassist_si128)
 #        endif
 
 #        include <smmintrin.h>
@@ -606,6 +619,25 @@ hex2bin(uint8_t *bin, size_t bin_maxlen, const char *hex, size_t hex_len)
 }
 
 /**
+ * Convert a hexadecimal string to a secret key.
+ *
+ * The input string must be exactly 32 or 64 characters long (IPCRYPT_KEYBYTES or
+ * IPCRYPT_NDX_KEYBYTES bytes in hex). Returns 0 on success, or -1 if the input string is invalid or
+ * conversion fails.
+ */
+int
+ipcrypt_key_from_hex(uint8_t *key, size_t key_len, const char *hex, size_t hex_len)
+{
+    if (hex_len != 2 * IPCRYPT_KEYBYTES && hex_len != 2 * IPCRYPT_NDX_KEYBYTES) {
+        return -1;
+    }
+    if (hex2bin(key, key_len, hex, hex_len) != key_len) {
+        return -1;
+    }
+    return 0;
+}
+
+/**
  * ipcrypt_str_to_ip16 parses an IP address string (IPv4 or IPv6) into a 16-byte buffer ip16.
  * If it detects an IPv4 address, it is stored as an IPv4-mapped IPv6 address.
  * Returns 0 on success, or -1 on failure.
@@ -674,6 +706,67 @@ ipcrypt_ip16_to_str(char ip_str[IPCRYPT_MAX_IP_STR_BYTES], const uint8_t ip16[16
 }
 
 /**
+ * Convert a socket address structure to a 16-byte binary IP representation.
+ *
+ * Supports both IPv4 (AF_INET) and IPv6 (AF_INET6) socket addresses.
+ * For IPv4 addresses, they are converted to IPv4-mapped IPv6 format.
+ *
+ * Returns 0 on success, or -1 if the address family is not supported.
+ */
+int
+ipcrypt_sockaddr_to_ip16(uint8_t ip16[16], const struct sockaddr *sa)
+{
+    if (sa->sa_family == AF_INET) {
+        const struct sockaddr_in *s = (const struct sockaddr_in *) sa;
+        memset(ip16, 0, 10);
+        ip16[10] = 0xff;
+        ip16[11] = 0xff;
+        memcpy(ip16 + 12, &s->sin_addr, 4);
+        return 0;
+    } else if (sa->sa_family == AF_INET6) {
+        const struct sockaddr_in6 *s = (const struct sockaddr_in6 *) sa;
+        memcpy(ip16, &s->sin6_addr, 16);
+        return 0;
+    }
+    return -1;
+}
+
+/**
+ * Convert a 16-byte binary IP address to a socket address structure.
+ *
+ * The socket address structure is populated based on the IP format:
+ * - For IPv4-mapped IPv6 addresses, an IPv4 socket address is created
+ * - For other IPv6 addresses, an IPv6 socket address is created
+ *
+ * The provided sockaddr_storage structure is guaranteed to be large enough
+ * to hold any socket address type.
+ */
+void
+ipcrypt_ip16_to_sockaddr(struct sockaddr_storage *sa, const uint8_t ip16[16])
+{
+    const uint8_t ipv4_mapped[12] = { 0, 0, 0, 0, 0, 0, 0, 0, 0xff, 0xff };
+
+    memset(sa, 0, sizeof *sa);
+    if (memcmp(ip16, ipv4_mapped, sizeof ipv4_mapped) == 0) {
+        struct sockaddr_in *s = (struct sockaddr_in *) sa;
+        s->sin_family         = AF_INET;
+        memcpy(&s->sin_addr, ip16 + 12, 4);
+#if defined(__APPLE__) || defined(__FreeBSD__) || defined(__NetBSD__) || defined(__OpenBSD__) || \
+    defined(__DragonFly__)
+        s->sin_len = sizeof *s;
+#endif
+    } else {
+        struct sockaddr_in6 *s = (struct sockaddr_in6 *) sa;
+        s->sin6_family         = AF_INET6;
+        memcpy(&s->sin6_addr, ip16, 16);
+#if defined(__APPLE__) || defined(__FreeBSD__) || defined(__NetBSD__) || defined(__OpenBSD__) || \
+    defined(__DragonFly__)
+        s->sin6_len = sizeof *s;
+#endif
+    }
+}
+
+/**
  * ipcrypt_init initializes an IPCrypt context with a 16-byte key.
  * Expands the key into round keys and stores them in ipcrypt->opaque.
  */
@@ -693,12 +786,16 @@ ipcrypt_init(IPCrypt *ipcrypt, const uint8_t key[IPCRYPT_KEYBYTES])
 void
 ipcrypt_deinit(IPCrypt *ipcrypt)
 {
-#ifdef __STDC_LIB_EXT1__
+#ifdef _MSC_VER
+    SecureZeroMemory(ipcrypt, sizeof *ipcrypt);
+#elif defined(__STDC_LIB_EXT1__)
     memset_s(ipcrypt, sizeof *ipcrypt, 0, sizeof *ipcrypt);
 #else
     memset(ipcrypt, 0, sizeof *ipcrypt);
-    // Compiler barrier to prevent optimizations from removing memset.
+// Compiler barrier to prevent optimizations from removing memset.
+#    if defined(__GNUC__) || defined(__clang__)
     __asm__ __volatile__("" : : "r"(ipcrypt) : "memory");
+#    endif
 #endif
 }
 
@@ -723,12 +820,16 @@ ipcrypt_ndx_init(IPCryptNDX *ipcrypt, const uint8_t key[IPCRYPT_NDX_KEYBYTES])
 void
 ipcrypt_ndx_deinit(IPCryptNDX *ipcrypt)
 {
-#ifdef __STDC_LIB_EXT1__
+#ifdef _MSC_VER
+    SecureZeroMemory(ipcrypt, sizeof *ipcrypt);
+#elif defined(__STDC_LIB_EXT1__)
     memset_s(ipcrypt, sizeof *ipcrypt, 0, sizeof *ipcrypt);
 #else
     memset(ipcrypt, 0, sizeof *ipcrypt);
-    // Compiler barrier to prevent optimizations from removing memset.
+// Compiler barrier to prevent optimizations from removing memset.
+#    if defined(__GNUC__) || defined(__clang__)
     __asm__ __volatile__("" : : "r"(ipcrypt) : "memory");
+#    endif
 #endif
 }
 
