@@ -1,6 +1,6 @@
 
 .zig-cache
 *~
-/target
+target
 Cargo.lock
 zig-out
