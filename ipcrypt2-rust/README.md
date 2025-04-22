@@ -1,6 +1,10 @@
 # ipcrypt2
 
-**ipcrypt2** is a Rust library to enable encryption and decryption of IP addresses (both IPv4 and IPv6).
+[![Crates.io](https://img.shields.io/crates/v/ipcrypt2.svg)](https://crates.io/crates/ipcrypt2)
+[![Documentation](https://docs.rs/ipcrypt2/badge.svg)](https://docs.rs/ipcrypt2)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
+Rust bindings for the `ipcrypt2` library, providing efficient and secure methods for IP address encryption and obfuscation. This implementation offers both format-preserving and non-deterministic encryption modes for IPv4 and IPv6 addresses.
 
 ## Features
 
