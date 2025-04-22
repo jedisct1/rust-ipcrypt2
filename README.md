@@ -13,7 +13,7 @@ IP address encryption and obfuscation are crucial for various security and priva
 
 This repository provides two distinct implementations:
 
-### 1. ipcrypt2-rust
+### 1. ipcrypt2
 
 Located in the `ipcrypt2-rust` directory, this implementation provides Rust bindings to the reference ipcrypt2 library. It offers:
 
@@ -21,7 +21,7 @@ Located in the `ipcrypt2-rust` directory, this implementation provides Rust bind
 - High performance through native code
 - FFI (Foreign Function Interface) bindings for seamless Rust integration
 
-### 2. pure-rust
+### 2. ipcrypt-rs
 
 Located in the `pure-rust` directory, this is a pure Rust implementation of the specification. It provides:
 
