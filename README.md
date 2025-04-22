@@ -1,4 +1,4 @@
-# ipcrypt implementations for Rust
+# IPCrypt implementations for Rust
 
 This repository contains two Rust implementations of the "Methods for IP Address Encryption and Obfuscation" specification, which defines efficient and secure methods for IP address encryption and obfuscation.
 
