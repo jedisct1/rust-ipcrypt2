@@ -34,8 +34,8 @@ Located in the `pure-rust` directory, this is a pure Rust implementation of the 
 
 Each implementation has its own detailed documentation:
 
-- [ipcrypt2-rust documentation](ipcrypt2-rust/README.md) - Rust bindings to the reference implementation
-- [pure-rust documentation](pure-rust/README.md) - Pure Rust implementation
+- [ipcrypt2 documentation](ipcrypt2-rust/README.md) - Rust bindings to the reference implementation
+- [ipcrypt-rs documentation](pure-rust/README.md) - Pure Rust implementation
 
 ## References
 
