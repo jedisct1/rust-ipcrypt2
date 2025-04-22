@@ -12,7 +12,7 @@ A pure Rust implementation of the IP address encryption and obfuscation methods 
 - **Format-Preserving Encryption**: Deterministic mode preserves IP address format
 - **Non-Deterministic Modes**: Two modes for enhanced privacy with different tweak sizes
 - **IPv4 and IPv6 Support**: Works with both address types seamlessly
-- **Minimal Dependencies**: Only uses `aes`, `rand`, and `ct-codecs` crates
+- **Minimal Dependencies**: Only uses the `aes` and `rand` crates
 - **Safe Implementation**: No unsafe code
 
 ## Installation

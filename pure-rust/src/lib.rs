@@ -50,6 +50,5 @@ pub use ndx::IpcryptNdx;
 
 pub mod reexports {
     pub use aes;
-    pub use ct_codecs;
     pub use rand;
 }

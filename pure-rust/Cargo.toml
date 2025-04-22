@@ -14,5 +14,7 @@ categories = ["cryptography", "network-programming"]
 [dependencies]
 aes = { version = "0.8", features = ["hazmat"] }
 rand = "0.9"
+
+[dev-dependencies]
 ct-codecs = "1.1"
 
