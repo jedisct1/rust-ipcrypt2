@@ -18,7 +18,7 @@ impl IpcryptNdx {
     pub const KEY_BYTES: usize = 32;
     /// The number of bytes required for the tweak.
     pub const TWEAK_BYTES: usize = 16;
-    /// The nmber of bytes of the encrypted IP address.
+    /// The number of bytes of the encrypted IP address.
     pub const NDIP_BYTES: usize = 32;
 
     /// Generates a new random key for encryption.
