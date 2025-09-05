@@ -39,7 +39,7 @@ IPCrypt provides three different methods for IP address encryption:
 ### Deterministic Encryption
 
 ```rust
-use ipcrypt::Ipcrypt;
+use ipcrypt_rs::Ipcrypt;
 use std::net::IpAddr;
 use std::str::FromStr;
 
@@ -62,7 +62,7 @@ assert_eq!(ip, decrypted);
 ### Non-Deterministic Encryption
 
 ```rust
-use ipcrypt::IpcryptNd;
+use ipcrypt_rs::IpcryptNd;
 use std::net::IpAddr;
 use std::str::FromStr;
 
@@ -85,7 +85,7 @@ assert_eq!(ip, decrypted);
 ### Extended Non-Deterministic Encryption
 
 ```rust
-use ipcrypt::IpcryptNdx;
+use ipcrypt_rs::IpcryptNdx;
 use std::net::IpAddr;
 use std::str::FromStr;
 
