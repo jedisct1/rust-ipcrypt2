@@ -21,7 +21,7 @@ Add this to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-ipcrypt-rs = "0.1.0"
+ipcrypt-rs = "0.9.0"
 ```
 
 ## Overview
