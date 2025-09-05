@@ -122,23 +122,35 @@ fn gmul2(x: u8) -> u8 {
 }
 
 /// Multiplies a byte by 9 in GF(2^8)
+#[inline]
 fn gmul9(x: u8) -> u8 {
-    gmul2(gmul2(gmul2(x))) ^ x
+    let x8 = gmul2(gmul2(gmul2(x))); // 8*x
+    x8 ^ x
 }
 
 /// Multiplies a byte by 11 in GF(2^8)
+#[inline]
 fn gmul11(x: u8) -> u8 {
-    gmul2(gmul2(gmul2(x))) ^ gmul2(x) ^ x
+    let x2 = gmul2(x);
+    let x8 = gmul2(gmul2(x2)); // Reuse x2 for efficiency
+    x8 ^ x2 ^ x
 }
 
 /// Multiplies a byte by 13 in GF(2^8)
+#[inline]
 fn gmul13(x: u8) -> u8 {
-    gmul2(gmul2(gmul2(x))) ^ gmul2(gmul2(x)) ^ x
+    let x4 = gmul2(gmul2(x));
+    let x8 = gmul2(x4); // Reuse x4 for efficiency
+    x8 ^ x4 ^ x
 }
 
 /// Multiplies a byte by 14 in GF(2^8)
+#[inline]
 fn gmul14(x: u8) -> u8 {
-    gmul2(gmul2(gmul2(x))) ^ gmul2(gmul2(x)) ^ gmul2(x)
+    let x2 = gmul2(x);
+    let x4 = gmul2(x2); // Reuse x2 for efficiency
+    let x8 = gmul2(x4); // Reuse x4 for efficiency
+    x8 ^ x4 ^ x2
 }
 
 /// Performs the inverse MixColumns operation on a block
