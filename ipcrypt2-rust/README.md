@@ -2,7 +2,7 @@
 
 [![Crates.io](https://img.shields.io/crates/v/ipcrypt2.svg)](https://crates.io/crates/ipcrypt2)
 [![Documentation](https://docs.rs/ipcrypt2/badge.svg)](https://docs.rs/ipcrypt2)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![License: ISC](https://img.shields.io/badge/License-ISC-blue.svg)](https://opensource.org/licenses/ISC)
 
 Rust bindings for the `ipcrypt2` library, providing efficient and secure methods for IP address encryption and obfuscation. This implementation offers both format-preserving and non-deterministic encryption modes for IPv4 and IPv6 addresses.
 
@@ -17,6 +17,9 @@ Rust bindings for the `ipcrypt2` library, providing efficient and secure methods
 - **NDX Mode: Non-Deterministic Encryption with Extended Tweaks (AES-XTX):**
   Similar to the non-deterministic mode but uses 16-byte tweaks for higher usage limits before collisions occur. Produces 32-byte encrypted values (or 64-character hex strings). This mode runs at half the speed of the regular non-deterministic mode.
 
+- **PFX Mode: Prefix-Preserving Encryption:**
+  Encrypts IP addresses while preserving their network prefix. IP addresses with the same prefix will produce encrypted addresses with the same prefix, maintaining network topology relationships. Uses a 32-byte key.
+
 - **IP Conversion Utilities:**
   Seamlessly convert between `std::net::IpAddr`, 16-byte binary representations, and IP strings. IPv4 addresses are automatically converted to IPv4‑mapped IPv6 format when needed.
 
@@ -29,7 +32,7 @@ To use **ipcrypt2** in your project, add it to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-ipcrypt2 = "0.1"  # Replace with the latest version
+ipcrypt2 = "0.2"  # Replace with the latest version
 ```
 
 ## Usage
@@ -71,6 +74,21 @@ let decrypted = ipcrypt.decrypt(&encrypted).unwrap();
 assert_eq!(ip, decrypted);
 ```
 
+For PFX mode (prefix-preserving encryption):
+
+```rust
+use ipcrypt2::IpcryptPfx;
+
+// Create an instance with a random key
+let ipcrypt = IpcryptPfx::new_random();
+
+// Encrypt and decrypt an IP address
+let ip = "192.168.1.1";
+let encrypted = ipcrypt.encrypt(ip).unwrap();
+let decrypted = ipcrypt.decrypt(&encrypted).unwrap();
+assert_eq!(ip, decrypted);
+```
+
 ### Advanced Usage
 
 For more control over the encryption process, you can use the lower-level methods:
@@ -97,7 +115,7 @@ assert_eq!("192.168.1.1", ip_str);
 
 ## API Overview
 
-The primary interfaces are provided by the `Ipcrypt` and `IpcryptNdx` structs, which expose several functionalities:
+The primary interfaces are provided by the `Ipcrypt`, `IpcryptNdx`, and `IpcryptPfx` structs, which expose several functionalities:
 
 ### Initialization
 
@@ -112,6 +130,12 @@ The primary interfaces are provided by the `Ipcrypt` and `IpcryptNdx` structs, w
 
 - **`IpcryptNdx::new(key: [u8; KEY_BYTES])`**
   Creates a new NDX instance with a specific key. The key must be exactly 32 bytes long.
+
+- **`IpcryptPfx::new_random()`**
+  Creates a new PFX instance with a randomly generated key.
+
+- **`IpcryptPfx::new(key: [u8; KEY_BYTES])`**
+  Creates a new PFX instance with a specific key. The key must be exactly 32 bytes long.
 
 ### Basic Methods
 
@@ -147,4 +171,4 @@ Contributions are welcome! If you encounter any issues or have feature requests,
 
 ## License
 
-This project is distributed under the MIT License. See the [LICENSE](LICENSE) file for more details.
+This project is distributed under the ISC License. See the [LICENSE](LICENSE) file for more details.

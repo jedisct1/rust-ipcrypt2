@@ -20,6 +20,11 @@ pub struct IPCryptNDX {
     opaque: [u8; 16 * 11 * 2],
 }
 
+#[repr(C)]
+pub struct IPCryptPFX {
+    opaque: [u8; 16 * 11 * 2],
+}
+
 extern "C" {
     fn ipcrypt_str_to_ip16(ip16: *mut u8, ip_str: *const c_char) -> c_int;
     fn ipcrypt_ip16_to_str(ip_str: *mut c_char, ip16: *const u8) -> usize;
@@ -75,6 +80,21 @@ extern "C" {
     ) -> usize;
     fn ipcrypt_ndx_decrypt_ip_str(
         ipcrypt: *const IPCryptNDX,
+        ip_str: *mut c_char,
+        encrypted_ip_str: *const c_char,
+    ) -> usize;
+
+    fn ipcrypt_pfx_init(ipcrypt: *mut IPCryptPFX, key: *const u8);
+    fn ipcrypt_pfx_deinit(ipcrypt: *mut IPCryptPFX);
+    fn ipcrypt_pfx_encrypt_ip16(ipcrypt: *const IPCryptPFX, ip16: *mut u8);
+    fn ipcrypt_pfx_decrypt_ip16(ipcrypt: *const IPCryptPFX, ip16: *mut u8);
+    fn ipcrypt_pfx_encrypt_ip_str(
+        ipcrypt: *const IPCryptPFX,
+        encrypted_ip_str: *mut c_char,
+        ip_str: *const c_char,
+    ) -> usize;
+    fn ipcrypt_pfx_decrypt_ip_str(
+        ipcrypt: *const IPCryptPFX,
         ip_str: *mut c_char,
         encrypted_ip_str: *const c_char,
     ) -> usize;
@@ -913,6 +933,279 @@ impl Drop for IpcryptNdx {
     }
 }
 
+/// A structure representing the IPCrypt context for PFX mode.
+///
+/// PFX mode provides prefix-preserving encryption, where IP addresses with the same prefix
+/// produce encrypted IP addresses with the same prefix. This is useful for maintaining
+/// network topology relationships while still encrypting the addresses.
+pub struct IpcryptPfx {
+    inner: IPCryptPFX,
+}
+
+impl IpcryptPfx {
+    /// The number of bytes required for the encryption key.
+    pub const KEY_BYTES: usize = 32;
+
+    /// Generates a new random key for encryption.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use ipcrypt2::IpcryptPfx;
+    ///
+    /// let key = IpcryptPfx::generate_key();
+    /// let ipcrypt = IpcryptPfx::new(key);
+    /// ```
+    pub fn generate_key() -> [u8; Self::KEY_BYTES] {
+        rand::random()
+    }
+
+    /// Creates a new IpcryptPfx instance with the given key.
+    ///
+    /// # Arguments
+    ///
+    /// * `key` - A 32-byte array containing the encryption key.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use ipcrypt2::IpcryptPfx;
+    ///
+    /// let key = [0u8; 32];
+    /// let ipcrypt = IpcryptPfx::new(key);
+    /// ```
+    pub fn new(key: [u8; Self::KEY_BYTES]) -> Self {
+        // Safety: IPCryptPFX is a C struct with a fixed size and no alignment requirements
+        let mut inner = std::mem::MaybeUninit::<IPCryptPFX>::uninit();
+
+        // Safety: We have a valid pointer to uninitialized memory and a valid key pointer
+        unsafe {
+            ipcrypt_pfx_init(inner.as_mut_ptr(), key.as_ptr());
+            Self {
+                inner: inner.assume_init(),
+            }
+        }
+    }
+
+    /// Encrypts a 16-byte IP address in place with prefix preservation.
+    pub fn encrypt_ip16(&self, ip: &mut [u8; 16]) {
+        // Safety: We have a valid IPCryptPFX instance and a valid mutable pointer to 16 bytes
+        unsafe {
+            ipcrypt_pfx_encrypt_ip16(&self.inner, ip.as_mut_ptr());
+        }
+    }
+
+    /// Decrypts a 16-byte IP address in place with prefix preservation.
+    pub fn decrypt_ip16(&self, ip: &mut [u8; 16]) {
+        // Safety: We have a valid IPCryptPFX instance and a valid mutable pointer to 16 bytes
+        unsafe {
+            ipcrypt_pfx_decrypt_ip16(&self.inner, ip.as_mut_ptr());
+        }
+    }
+
+    /// Encrypts an IP address string (IPv4 or IPv6) with prefix preservation.
+    ///
+    /// On success, returns the encrypted IP string.
+    pub fn encrypt_ip_str(&self, ip: &str) -> Result<String, IpcryptError> {
+        let c_ip = CString::new(ip).map_err(|_| IpcryptError::NullByteInInput)?;
+        let mut buffer = [0u8; MAX_IP_STR_BYTES];
+
+        // Safety: We have valid pointers to initialized memory and a valid C string
+        let ret = unsafe {
+            ipcrypt_pfx_encrypt_ip_str(
+                &self.inner,
+                buffer.as_mut_ptr() as *mut c_char,
+                c_ip.as_ptr(),
+            )
+        };
+
+        if ret == 0 {
+            return Err(IpcryptError::OperationFailed);
+        }
+
+        // Safety: The buffer is null-terminated and contains valid UTF-8
+        unsafe {
+            CStr::from_ptr(buffer.as_ptr() as *const c_char)
+                .to_str()
+                .map(|s| s.to_owned())
+                .map_err(Into::into)
+        }
+    }
+
+    /// Decrypts an encrypted IP address string with prefix preservation.
+    ///
+    /// On success, returns the decrypted IP string.
+    pub fn decrypt_ip_str(&self, encrypted: &str) -> Result<String, IpcryptError> {
+        let c_encrypted = CString::new(encrypted).map_err(|_| IpcryptError::NullByteInInput)?;
+        let mut buffer = [0u8; MAX_IP_STR_BYTES];
+        let ret = unsafe {
+            ipcrypt_pfx_decrypt_ip_str(
+                &self.inner,
+                buffer.as_mut_ptr() as *mut c_char,
+                c_encrypted.as_ptr(),
+            )
+        };
+        if ret == 0 {
+            return Err(IpcryptError::OperationFailed);
+        }
+        unsafe {
+            CStr::from_ptr(buffer.as_ptr() as *const c_char)
+                .to_str()
+                .map(|s| s.to_owned())
+                .map_err(Into::into)
+        }
+    }
+
+    /// Encrypts an IP address and returns the result as a new IP address.
+    ///
+    /// # Arguments
+    ///
+    /// * `ip` - The IP address to encrypt
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use ipcrypt2::IpcryptPfx;
+    /// use std::net::IpAddr;
+    ///
+    /// let ipcrypt = IpcryptPfx::new([0u8; 32]);
+    /// let ip = "192.168.1.1".parse::<IpAddr>().unwrap();
+    /// let encrypted = ipcrypt.encrypt_ipaddr(ip).unwrap();
+    /// ```
+    pub fn encrypt_ipaddr(&self, ip: IpAddr) -> Result<IpAddr, IpcryptError> {
+        let mut ip16 = ipaddr_to_ip16(ip);
+        self.encrypt_ip16(&mut ip16);
+        ip16_to_ipaddr(ip16)
+    }
+
+    /// Decrypts an encrypted IP address and returns the result as a new IP address.
+    ///
+    /// # Arguments
+    ///
+    /// * `encrypted` - The encrypted IP address to decrypt
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use ipcrypt2::IpcryptPfx;
+    /// use std::net::IpAddr;
+    ///
+    /// let ipcrypt = IpcryptPfx::new([0u8; 32]);
+    /// let ip = "192.168.1.1".parse::<IpAddr>().unwrap();
+    /// let encrypted = ipcrypt.encrypt_ipaddr(ip).unwrap();
+    /// let decrypted = ipcrypt.decrypt_ipaddr(encrypted).unwrap();
+    /// assert_eq!(ip, decrypted);
+    /// ```
+    pub fn decrypt_ipaddr(&self, encrypted: IpAddr) -> Result<IpAddr, IpcryptError> {
+        let mut ip16 = ipaddr_to_ip16(encrypted);
+        self.decrypt_ip16(&mut ip16);
+        ip16_to_ipaddr(ip16)
+    }
+
+    /// Creates a new IpcryptPfx instance with a randomly generated key.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use ipcrypt2::IpcryptPfx;
+    ///
+    /// let ipcrypt = IpcryptPfx::new_random();
+    /// ```
+    pub fn new_random() -> Self {
+        Self::new(Self::generate_key())
+    }
+
+    /// Encrypts an IP address string and returns the result as a new string.
+    /// This is a convenience method that handles both IPv4 and IPv6 addresses.
+    ///
+    /// # Arguments
+    ///
+    /// * `ip` - The IP address string to encrypt (IPv4 or IPv6)
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use ipcrypt2::IpcryptPfx;
+    ///
+    /// let ipcrypt = IpcryptPfx::new_random();
+    /// let encrypted = ipcrypt.encrypt("192.168.1.1").unwrap();
+    /// let decrypted = ipcrypt.decrypt(&encrypted).unwrap();
+    /// assert_eq!("192.168.1.1", decrypted);
+    /// ```
+    pub fn encrypt(&self, ip: &str) -> Result<String, IpcryptError> {
+        self.encrypt_ip_str(ip)
+    }
+
+    /// Decrypts an encrypted IP address string.
+    /// This is a convenience method that handles both IPv4 and IPv6 addresses.
+    ///
+    /// # Arguments
+    ///
+    /// * `encrypted` - The encrypted IP address string to decrypt
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use ipcrypt2::IpcryptPfx;
+    ///
+    /// let ipcrypt = IpcryptPfx::new_random();
+    /// let encrypted = ipcrypt.encrypt("192.168.1.1").unwrap();
+    /// let decrypted = ipcrypt.decrypt(&encrypted).unwrap();
+    /// assert_eq!("192.168.1.1", decrypted);
+    /// ```
+    pub fn decrypt(&self, encrypted: &str) -> Result<String, IpcryptError> {
+        self.decrypt_ip_str(encrypted)
+    }
+
+    /// Converts an IP address string to its 16-byte representation.
+    /// This is a convenience method that handles both IPv4 and IPv6 addresses.
+    ///
+    /// # Arguments
+    ///
+    /// * `ip` - The IP address string to convert
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use ipcrypt2::IpcryptPfx;
+    ///
+    /// let ip16 = IpcryptPfx::to_bytes("192.168.1.1").unwrap();
+    /// let ip_str = IpcryptPfx::from_bytes(&ip16).unwrap();
+    /// assert_eq!("192.168.1.1", ip_str);
+    /// ```
+    pub fn to_bytes(ip: &str) -> Result<[u8; 16], IpcryptError> {
+        Ipcrypt::str_to_ip16(ip)
+    }
+
+    /// Converts a 16-byte IP address representation to a string.
+    /// This is a convenience method that handles both IPv4 and IPv6 addresses.
+    ///
+    /// # Arguments
+    ///
+    /// * `ip16` - The 16-byte IP address to convert
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use ipcrypt2::IpcryptPfx;
+    ///
+    /// let ip16 = IpcryptPfx::to_bytes("192.168.1.1").unwrap();
+    /// let ip_str = IpcryptPfx::from_bytes(&ip16).unwrap();
+    /// assert_eq!("192.168.1.1", ip_str);
+    /// ```
+    pub fn from_bytes(ip16: &[u8; 16]) -> Result<String, IpcryptError> {
+        Ipcrypt::ip16_to_str(ip16)
+    }
+}
+
+impl Drop for IpcryptPfx {
+    fn drop(&mut self) {
+        unsafe {
+            ipcrypt_pfx_deinit(&mut self.inner);
+        }
+    }
+}
+
 /// Converts an IP address string (IPv4 or IPv6) to a 16-byte binary representation.
 ///
 /// Returns the binary representation as a 16-byte array on success.
@@ -1129,5 +1422,90 @@ mod tests {
             .nd_decrypt_ipaddr_str(&nd_encrypted)
             .expect("NDX Decryption failed");
         assert_eq!(ip, nd_decrypted);
+    }
+
+    // --- PFX tests ---
+
+    #[test]
+    fn test_pfx_ip16_encrypt_decrypt() {
+        let key = IpcryptPfx::generate_key();
+        let ipcrypt = IpcryptPfx::new(key);
+        let mut ip = [192, 168, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+        let original = ip;
+        ipcrypt.encrypt_ip16(&mut ip);
+        assert_ne!(ip, original);
+        ipcrypt.decrypt_ip16(&mut ip);
+        assert_eq!(ip, original);
+    }
+
+    #[test]
+    fn test_pfx_ip_str_encrypt_decrypt() {
+        let key = IpcryptPfx::generate_key();
+        let ipcrypt = IpcryptPfx::new(key);
+        let ip = "192.168.1.1";
+        let encrypted = ipcrypt.encrypt_ip_str(ip).expect("PFX Encryption failed");
+        let decrypted = ipcrypt
+            .decrypt_ip_str(&encrypted)
+            .expect("PFX Decryption failed");
+        assert_eq!(ip, decrypted);
+    }
+
+    #[test]
+    fn test_pfx_encrypt_decrypt_ipaddr() {
+        let key = IpcryptPfx::generate_key();
+        let ipcrypt = IpcryptPfx::new(key);
+
+        // Test IPv4
+        let ip_v4 = IpAddr::V4(Ipv4Addr::new(192, 168, 1, 1));
+        let encrypted_v4 = ipcrypt
+            .encrypt_ipaddr(ip_v4)
+            .expect("PFX Encryption failed");
+        let decrypted_v4 = ipcrypt
+            .decrypt_ipaddr(encrypted_v4)
+            .expect("PFX Decryption failed");
+        assert_eq!(ip_v4, decrypted_v4);
+
+        // Test IPv6
+        let ip_v6 = IpAddr::V6(Ipv6Addr::LOCALHOST);
+        let encrypted_v6 = ipcrypt
+            .encrypt_ipaddr(ip_v6)
+            .expect("PFX Encryption failed");
+        let decrypted_v6 = ipcrypt
+            .decrypt_ipaddr(encrypted_v6)
+            .expect("PFX Decryption failed");
+        assert_eq!(ip_v6, decrypted_v6);
+    }
+
+    #[test]
+    fn test_pfx_convenience_methods() {
+        let ipcrypt = IpcryptPfx::new_random();
+        let ip = "10.0.0.1";
+
+        // Test encrypt/decrypt convenience methods
+        let encrypted = ipcrypt.encrypt(ip).expect("Encryption failed");
+        let decrypted = ipcrypt.decrypt(&encrypted).expect("Decryption failed");
+        assert_eq!(ip, decrypted);
+
+        // Test to_bytes/from_bytes convenience methods
+        let ip16 = IpcryptPfx::to_bytes(ip).expect("to_bytes failed");
+        let ip_str = IpcryptPfx::from_bytes(&ip16).expect("from_bytes failed");
+        assert_eq!(ip, ip_str);
+    }
+
+    #[test]
+    fn test_pfx_prefix_preservation() {
+        let key = IpcryptPfx::generate_key();
+        let ipcrypt = IpcryptPfx::new(key);
+
+        // Test that IPs with same prefix produce encrypted IPs with same prefix
+        let ip1 = "192.168.1.1";
+        let ip2 = "192.168.1.2";
+
+        let encrypted1 = ipcrypt.encrypt_ip_str(ip1).unwrap();
+        let encrypted2 = ipcrypt.encrypt_ip_str(ip2).unwrap();
+
+        // encrypted1 and encrypted2 should share the same prefix
+        // For IPv4 addresses, the first two octets should be the same
+        assert_eq!(&encrypted1[..7], &encrypted2[..7]); // "192.168"
     }
 }
