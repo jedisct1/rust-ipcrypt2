@@ -10,6 +10,7 @@ A pure Rust implementation of the IP address encryption and obfuscation methods 
 
 - **Pure Rust Implementation**: Written entirely in Rust with no C bindings or external dependencies
 - **Format-Preserving Encryption**: Deterministic mode preserves IP address format
+- **Prefix-Preserving Encryption**: PFX mode maintains network structure while encrypting addresses
 - **Non-Deterministic Modes**: Two modes for enhanced privacy with different tweak sizes
 - **IPv4 and IPv6 Support**: Works with both address types seamlessly
 - **Minimal Dependencies**: Only uses the `aes` and `rand` crates
@@ -21,18 +22,20 @@ Add this to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-ipcrypt-rs = "0.9.0"
+ipcrypt-rs = "0.9.2"
 ```
 
 ## Overview
 
-IPCrypt provides three different methods for IP address encryption:
+IPCrypt provides four different methods for IP address encryption:
 
 1. **Deterministic Encryption** (`Ipcrypt`): Uses AES-128 in a deterministic mode, where the same input always produces the same output for a given key. This mode preserves the IP address format.
 
-2. **Non-Deterministic Encryption** (`IpcryptNd`): Uses KIASU-BC with an 8-byte tweak to provide non-deterministic encryption. The output includes both the tweak and ciphertext.
+2. **Prefix-Preserving Encryption** (`IpcryptPfx`): A deterministic mode that maintains network prefix structure while encrypting addresses. Addresses in the same subnet will remain in the same subnet after encryption, enabling network analytics while preserving privacy.
 
-3. **Extended Non-Deterministic Encryption** (`IpcryptNdx`): Uses AES-XTS with a 32-byte key (two AES-128 keys) and 16-byte tweak for enhanced security.
+3. **Non-Deterministic Encryption** (`IpcryptNd`): Uses KIASU-BC with an 8-byte tweak to provide non-deterministic encryption. The output includes both the tweak and ciphertext.
+
+4. **Extended Non-Deterministic Encryption** (`IpcryptNdx`): Uses AES-XTS with a 32-byte key (two AES-128 keys) and 16-byte tweak for enhanced security.
 
 ## Usage
 
@@ -57,6 +60,36 @@ let encrypted = cipher.encrypt_ipaddr(ip);
 // Decrypt the IP address
 let decrypted = cipher.decrypt_ipaddr(encrypted);
 assert_eq!(ip, decrypted);
+```
+
+### Prefix-Preserving Encryption
+
+```rust
+use ipcrypt_rs::IpcryptPfx;
+use std::net::IpAddr;
+use std::str::FromStr;
+
+// Create a new instance with a random key
+let cipher = IpcryptPfx::new_random();
+
+// Or with a specific key (32 bytes)
+let key = [0u8; IpcryptPfx::KEY_BYTES];
+let cipher = IpcryptPfx::new(key);
+
+// Encrypt an IP address
+let ip = IpAddr::from_str("192.168.1.1").unwrap();
+let encrypted = cipher.encrypt_ipaddr(ip);
+
+// Decrypt the IP address
+let decrypted = cipher.decrypt_ipaddr(encrypted);
+assert_eq!(ip, decrypted);
+
+// Note: Addresses in the same subnet will remain in the same subnet
+let ip1 = IpAddr::from_str("192.168.1.1").unwrap();
+let ip2 = IpAddr::from_str("192.168.1.2").unwrap();
+let enc1 = cipher.encrypt_ipaddr(ip1);
+let enc2 = cipher.encrypt_ipaddr(ip2);
+// Both encrypted addresses will be in the same /24 network
 ```
 
 ### Non-Deterministic Encryption
@@ -117,6 +150,15 @@ assert_eq!(ip, decrypted);
 - `new(key: [u8; KEY_BYTES]) -> Self`: Creates a new instance with the given key
 - `new_random() -> Self`: Creates a new instance with a random key
 - `encrypt_ipaddr(ip: IpAddr) -> IpAddr`: Encrypts an IP address
+- `decrypt_ipaddr(encrypted: IpAddr) -> IpAddr`: Decrypts an encrypted IP address
+
+### Prefix-Preserving Mode (`IpcryptPfx`)
+
+- `KEY_BYTES`: The number of bytes required for the encryption key (32)
+- `new(key: [u8; KEY_BYTES]) -> Self`: Creates a new instance with the given key
+- `new_random() -> Self`: Creates a new instance with a random key
+- `generate_key() -> [u8; KEY_BYTES]`: Generates a random key
+- `encrypt_ipaddr(ip: IpAddr) -> IpAddr`: Encrypts an IP address while preserving prefix
 - `decrypt_ipaddr(encrypted: IpAddr) -> IpAddr`: Decrypts an encrypted IP address
 
 ### Non-Deterministic Mode (`IpcryptNd`)
