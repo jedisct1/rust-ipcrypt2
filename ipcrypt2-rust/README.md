@@ -32,7 +32,7 @@ To use **ipcrypt2** in your project, add it to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-ipcrypt2 = "0.2"  # Replace with the latest version
+ipcrypt2 = "0.9"  # Replace with the latest version
 ```
 
 ## Usage
