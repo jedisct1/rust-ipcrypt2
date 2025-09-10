@@ -39,4 +39,4 @@ Each implementation has its own detailed documentation:
 
 ## References
 
-- [Methods for IP Address Encryption and Obfuscation Specification](https://datatracker.ietf.org/doc/draft-dulaunoy-ipaddr-privacy/)
+- [Methods for IP Address Encryption and Obfuscation Specification](https://ipcrypt-std.github.io/)
