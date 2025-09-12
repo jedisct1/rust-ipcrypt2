@@ -18,7 +18,10 @@
 //! use std::str::FromStr;
 //!
 //! // Deterministic encryption
+//! # #[cfg(feature = "random")]
 //! let key = Ipcrypt::generate_key();
+//! # #[cfg(not(feature = "random"))]
+//! # let key = [0u8; 16];
 //! let ip = IpAddr::from_str("192.168.1.1").unwrap();
 //! let cipher = Ipcrypt::new(key);
 //! let encrypted = cipher.encrypt_ipaddr(ip);
@@ -26,15 +29,23 @@
 //! assert_eq!(ip, decrypted);
 //!
 //! // Prefix-preserving encryption
+//! # #[cfg(feature = "random")]
 //! let pfx_key = IpcryptPfx::generate_key();
+//! # #[cfg(not(feature = "random"))]
+//! # let pfx_key = {
+//! #     let mut key = [0u8; 32];
+//! #     key[0] = 1; // Make the two halves different
+//! #     key
+//! # };
 //! let cipher_pfx = IpcryptPfx::new(pfx_key);
 //! let encrypted_pfx = cipher_pfx.encrypt_ipaddr(ip);
 //! let decrypted_pfx = cipher_pfx.decrypt_ipaddr(encrypted_pfx);
 //! assert_eq!(ip, decrypted_pfx);
 //!
-//! // Non-deterministic encryption with automatic tweak generation
+//! // Non-deterministic encryption with a provided tweak
 //! let cipher_nd = IpcryptNd::new(key);
-//! let encrypted_bytes = cipher_nd.encrypt_ipaddr(ip, None);
+//! let tweak = [2u8; 8];
+//! let encrypted_bytes = cipher_nd.encrypt_ipaddr(ip, Some(tweak));
 //! let decrypted = cipher_nd.decrypt_ipaddr(&encrypted_bytes);
 //! assert_eq!(ip, decrypted);
 //! ```
@@ -61,5 +72,6 @@ pub use pfx::IpcryptPfx;
 
 pub mod reexports {
     pub use aes;
+    #[cfg(feature = "random")]
     pub use rand;
 }

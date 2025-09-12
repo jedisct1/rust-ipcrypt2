@@ -15,6 +15,7 @@ impl Ipcrypt {
     pub const KEY_BYTES: usize = 16;
 
     /// Generates a new random key for encryption.
+    #[cfg(feature = "random")]
     pub fn generate_key() -> [u8; Self::KEY_BYTES] {
         rand::random()
     }
@@ -30,6 +31,7 @@ impl Ipcrypt {
     }
 
     /// Creates a new Ipcrypt instance with a random key.
+    #[cfg(feature = "random")]
     pub fn new_random() -> Self {
         Self::new(Self::generate_key())
     }
@@ -129,6 +131,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "random")]
     fn test_random_key() {
         let ipcrypt = Ipcrypt::new_random();
         let ip = IpAddr::from_str("192.0.2.1").unwrap();

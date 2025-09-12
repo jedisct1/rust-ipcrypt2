@@ -1,6 +1,6 @@
 [package]
 name = "ipcrypt-rs"
-version = "0.9.3"
+version = "0.9.4"
 edition = "2021"
 authors = ["Frank Denis <github@pureftpd.org>"]
 description = "IP address encryption and obfuscation methods in pure Rust"
@@ -11,10 +11,14 @@ license = "ISC"
 keywords = ["encryption", "privacy", "ip", "ipcrypt", "security"]
 categories = ["cryptography", "network-programming"]
 
+[features]
+default = ["random"]
+random = ["dep:rand", "dep:getrandom"]
+
 [dependencies]
 aes = { version = "0.8", features = ["hazmat"] }
-rand = "0.9"
-getrandom = { version = "0.3", features = ["wasm_js"] }
+rand = { version = "0.9", optional = true }
+getrandom = { version = "0.3", features = ["wasm_js"], optional = true }
 
 [dev-dependencies]
 ct-codecs = "1.1"

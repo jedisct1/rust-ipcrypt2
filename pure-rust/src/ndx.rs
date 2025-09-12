@@ -22,6 +22,7 @@ impl IpcryptNdx {
     pub const NDIP_BYTES: usize = 32;
 
     /// Generates a new random key for encryption.
+    #[cfg(feature = "random")]
     pub fn generate_key() -> [u8; Self::KEY_BYTES] {
         rand::random()
     }
@@ -39,11 +40,13 @@ impl IpcryptNdx {
     }
 
     /// Creates a new IpcryptNdx instance with a random key.
+    #[cfg(feature = "random")]
     pub fn new_random() -> Self {
         Self::new(Self::generate_key())
     }
 
     /// Generates a random tweak.
+    #[cfg(feature = "random")]
     pub fn generate_tweak() -> [u8; Self::TWEAK_BYTES] {
         rand::random()
     }
@@ -119,7 +122,10 @@ impl IpcryptNdx {
         tweak: Option<[u8; Self::TWEAK_BYTES]>,
     ) -> [u8; Self::NDIP_BYTES] {
         let mut out: [u8; Self::NDIP_BYTES] = [0; Self::NDIP_BYTES];
+        #[cfg(feature = "random")]
         let tweak = tweak.unwrap_or_else(Self::generate_tweak);
+        #[cfg(not(feature = "random"))]
+        let tweak = tweak.expect("tweak must be provided when random feature is disabled");
         let mut bytes = ip_to_bytes(ip);
         self.encrypt_ip16(&mut bytes, &tweak);
         out[0..16].copy_from_slice(&tweak);
