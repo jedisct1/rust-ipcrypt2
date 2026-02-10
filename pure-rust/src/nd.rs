@@ -10,13 +10,7 @@ use crate::common::{bytes_to_ip, ip_to_bytes};
 /// This struct provides methods for encrypting and decrypting IP addresses using KIASU-BC mode
 /// with an 8-byte tweak. The key is 16 bytes (one AES-128 key).
 pub struct IpcryptNd {
-    round_keys: Vec<Block>,
-}
-
-impl Drop for IpcryptNd {
-    fn drop(&mut self) {
-        self.round_keys.clear();
-    }
+    round_keys: [Block; 11],
 }
 
 impl IpcryptNd {
@@ -201,12 +195,11 @@ impl IpcryptNd {
     ///
     /// This is an internal function used during initialization to generate the round keys
     /// needed for encryption and decryption operations.
-    fn expand_key(key: &[u8; Self::KEY_BYTES]) -> Vec<Block> {
-        let mut round_keys = Vec::with_capacity(11);
+    fn expand_key(key: &[u8; Self::KEY_BYTES]) -> [Block; 11] {
+        let mut round_keys = [Block::default(); 11];
 
         // First round key is the original key
-        let current_key = Block::from(*key);
-        round_keys.push(current_key);
+        round_keys[0] = Block::from(*key);
 
         // Generate remaining round keys
         for i in 1..11 {
@@ -246,7 +239,7 @@ impl IpcryptNd {
             next_key[14] = next_key[10] ^ prev_key[14];
             next_key[15] = next_key[11] ^ prev_key[15];
 
-            round_keys.push(next_key);
+            round_keys[i] = next_key;
         }
 
         round_keys
