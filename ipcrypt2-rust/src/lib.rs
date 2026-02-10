@@ -685,13 +685,13 @@ pub struct IpcryptNdx {
 }
 
 impl IpcryptNdx {
-    /// The maximum number of bytes in the encrypted IP string (including null terminator) in NDX mode.
+    /// The number of bytes required for the encryption key.
     pub const KEY_BYTES: usize = 32;
 
     /// The number of bytes in the tweak used for encryption/decryption in NDX mode.
     pub const TWEAK_BYTES: usize = 16;
 
-    /// The maximum number of bytes in the encrypted IP string (including null terminator) in NDX mode.
+    /// The number of bytes in the encrypted output for non-deterministic NDX mode.
     pub const NDIP_BYTES: usize = 32;
 
     /// The maximum number of bytes in the encrypted IP string (including null terminator) in NDX mode.
@@ -715,7 +715,7 @@ impl IpcryptNdx {
 
     /// Non-deterministically encrypts a 16-byte IP address.
     ///
-    /// Returns a 24-byte encrypted value.
+    /// Returns a 32-byte encrypted value.
     pub fn nd_encrypt_ip16(&self, ip: &[u8; 16]) -> [u8; Self::NDIP_BYTES] {
         let random: [u8; Self::TWEAK_BYTES] = rand::random();
         let mut ndip = [0u8; Self::NDIP_BYTES];
@@ -725,7 +725,7 @@ impl IpcryptNdx {
         ndip
     }
 
-    /// Non-deterministically decrypts a 24-byte encrypted IP address.
+    /// Non-deterministically decrypts a 32-byte encrypted IP address.
     ///
     /// Returns the decrypted 16-byte IP address.
     pub fn nd_decrypt_ip16(&self, ndip: &[u8; Self::NDIP_BYTES]) -> [u8; 16] {

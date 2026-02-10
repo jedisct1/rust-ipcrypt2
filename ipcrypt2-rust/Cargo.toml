@@ -7,7 +7,7 @@ authors = ["Frank Denis <github@pureftpd.org>"]
 homepage = "https://github.com/jedisct1/rust-ipcrypt2"
 repository = "https://github.com/jedisct1/rust-ipcrypt2"
 documentation = "https://docs.rs/ipcrypt2"
-categories = ["cryptography", "wasm", "security", "no-std"]
+categories = ["cryptography", "wasm", "security"]
 keywords = ["crypto", "ip", "address", "obfuscation", "encryption"]
 description = """
 A Rust library for format-preserving encryption of IP addresses.
