@@ -56,6 +56,18 @@
 #    define __vectorcall
 #endif
 
+#ifndef HAVE_EXPLICIT_BZERO
+#    if (defined(__OpenBSD__) || defined(__FreeBSD__) || defined(__NetBSD__) || \
+         defined(__DragonFly__)) ||                                             \
+        (defined(__sun) && defined(__illumos__))
+#        define HAVE_EXPLICIT_BZERO 1
+#    elif defined(__GLIBC__) && defined(__GLIBC_PREREQ) && defined(_GNU_SOURCE)
+#        if __GLIBC_PREREQ(2, 25)
+#            define HAVE_EXPLICIT_BZERO 1
+#        endif
+#    endif
+#endif
+
 #ifdef __aarch64__
 #    ifndef __ARM_FEATURE_CRYPTO
 #        define __ARM_FEATURE_CRYPTO 1
@@ -133,13 +145,11 @@ typedef uint64x2_t BlockVec;
 /**
  * Shift left a 128-bit register by b bytes (zero-filling from the right).
  */
-#    define BYTESHL128(a, b) vreinterpretq_u64_u8(vextq_s8(vdupq_n_s8(0), (uint8x16_t) a, 16 - (b)))
+#    define BYTESHL128(a, b) vreinterpretq_u64_u8(vextq_u8(vdupq_n_u8(0), vreinterpretq_u8_u64(a), 16 - (b)))
 /**
- * Reorder 32-bit lanes in a 128-bit register according to the indices (a, b, c, d).
+ * Broadcast 32-bit lane 3 across the 128-bit register.
  */
-#    define SHUFFLE32x4(x, a, b, c, d)                 \
-        vreinterpretq_u64_u32(__builtin_shufflevector( \
-            vreinterpretq_u32_u64(x), vreinterpretq_u32_u64(x), (a), (b), (c), (d)))
+#    define SHUFFLE32x4_3333(x) vreinterpretq_u64_u32(vdupq_laneq_u32(vreinterpretq_u32_u64(x), 3))
 /**
  * Invert an AES round key for decryption.
  */
@@ -156,11 +166,11 @@ typedef uint64x2_t BlockVec;
 static inline BlockVec
 SHL1_128(const BlockVec a)
 {
-    const BlockVec shl     = vshlq_n_u8(a, 1);
-    const BlockVec msb     = vshrq_n_u8(a, 7);
-    const BlockVec zero    = vdupq_n_u8(0);
-    const BlockVec carries = vextq_u8(msb, zero, 1);
-    return vorrq_u8(shl, carries);
+    const uint8x16_t shl     = vshlq_n_u8(vreinterpretq_u8_u64(a), 1);
+    const uint8x16_t msb     = vshrq_n_u8(vreinterpretq_u8_u64(a), 7);
+    const uint8x16_t zero    = vdupq_n_u8(0);
+    const uint8x16_t carries = vextq_u8(msb, zero, 1);
+    return vreinterpretq_u64_u8(vorrq_u8(shl, carries));
 }
 
 /**
@@ -175,8 +185,10 @@ AES_KEYGEN(BlockVec block_vec, const int rc)
     // This extracts the needed transformation for generating a new round key.
     uint8x16_t a = vaeseq_u8(vreinterpretq_u8_u64(block_vec), vmovq_n_u8(0));
     // Shuffle for the key expansion rotation.
-    const uint8x16_t b =
-        __builtin_shufflevector(a, a, 4, 1, 14, 11, 1, 14, 11, 4, 12, 9, 6, 3, 9, 6, 3, 12);
+    static const uint8_t aes_keygen_shuffle[16] = {
+        4, 1, 14, 11, 1, 14, 11, 4, 12, 9, 6, 3, 9, 6, 3, 12,
+    };
+    const BlockVec b = vreinterpretq_u64_u8(vqtbl1q_u8(a, vld1q_u8(aes_keygen_shuffle)));
     // Combine with round constant.
     const uint64x2_t c = SET64x2((uint64_t) rc << 32, (uint64_t) rc << 32);
     return XOR128(b, c);
@@ -271,7 +283,7 @@ typedef __m128i BlockVec;
 /**
  * Reorder 32-bit lanes in a 128-bit block.
  */
-#    define SHUFFLE32x4(x, a, b, c, d)       _mm_shuffle_epi32((x), _MM_SHUFFLE((d), (c), (b), (a)))
+#    define SHUFFLE32x4_3333(x)              _mm_shuffle_epi32((x), _MM_SHUFFLE(3, 3, 3, 3))
 /**
  * Invert an AES round key for decryption.
  */
@@ -347,7 +359,7 @@ expand_key(KeySchedule rkeys, const unsigned char key[IPCRYPT_KEYBYTES])
     s          = AES_KEYGEN(t, RC);           \
     t          = XOR128(t, BYTESHL128(t, 4)); \
     t          = XOR128(t, BYTESHL128(t, 8)); \
-    t          = XOR128(t, SHUFFLE32x4(s, 3, 3, 3, 3));
+    t          = XOR128(t, SHUFFLE32x4_3333(s));
 
     // Load the initial 128-bit key from memory.
     t = LOAD128(key);
@@ -659,6 +671,32 @@ hex2bin(uint8_t *bin, size_t bin_maxlen, const char *hex, size_t hex_len)
 }
 
 /**
+ * ipcrypt_zeroize securely zeroes a memory region of length len starting at pnt.
+ * This function attempts to prevent the compiler from optimizing away the zeroing.
+ */
+static void
+ipcrypt_zeroize(void *pnt, size_t len)
+{
+#ifdef HAVE_EXPLICIT_BZERO
+    explicit_bzero(pnt, len);
+#elif defined(_MSC_VER)
+    SecureZeroMemory(pnt, len);
+#elif defined(__STDC_LIB_EXT1__)
+    memset_s(pnt, len, 0, len);
+#elif defined(__GNUC__) || defined(__clang__)
+    memset(pnt, 0, len);
+    // Compiler barrier to prevent optimizations from removing memset.
+    __asm__ __volatile__("" : : "r"(pnt) : "memory");
+#else
+    volatile unsigned char *volatile pnt_ = (volatile unsigned char *volatile) pnt;
+    size_t i                              = (size_t) 0U;
+    while (i < len) {
+        pnt_[i++] = 0U;
+    }
+#endif
+}
+
+/**
  * Convert a hexadecimal string to a secret key.
  *
  * The input string must be exactly 32 or 64 characters long (IPCRYPT_KEYBYTES or
@@ -862,32 +900,44 @@ ipcrypt_init(IPCrypt *ipcrypt, const uint8_t key[IPCRYPT_KEYBYTES])
 void
 ipcrypt_deinit(IPCrypt *ipcrypt)
 {
-#ifdef _MSC_VER
-    SecureZeroMemory(ipcrypt, sizeof *ipcrypt);
-#elif defined(__STDC_LIB_EXT1__)
-    memset_s(ipcrypt, sizeof *ipcrypt, 0, sizeof *ipcrypt);
-#else
-    memset(ipcrypt, 0, sizeof *ipcrypt);
-// Compiler barrier to prevent optimizations from removing memset.
-#    if defined(__GNUC__) || defined(__clang__)
-    __asm__ __volatile__("" : : "r"(ipcrypt) : "memory");
-#    endif
-#endif
+    ipcrypt_zeroize(ipcrypt, sizeof *ipcrypt);
 }
 
 /**
  * ipcrypt_pfx_init initializes the IPCryptPFX context with a 32-byte secret key.
  * This prepares the context for prefix-preserving IP address encryption operations.
+ * Returns 0 on success.
  */
-void
+int
 ipcrypt_pfx_init(IPCryptPFX *ipcrypt, const uint8_t key[IPCRYPT_PFX_KEYBYTES])
 {
     PFXState st;
+    uint8_t  diff[16];
+    size_t   i;
+    uint8_t  d;
 
     expand_key(st.k1keys, key);
     expand_key(st.k2keys, key + 16);
+
+    /**
+     * Ensure the two keys differ in case of misuse.
+     */
+    STORE128(diff, XOR128(st.k1keys[ROUNDS / 2], st.k2keys[ROUNDS / 2]));
+    d = 0;
+    for (i = 0; i < 16; i++) {
+        d |= diff[i];
+    }
+    if (d == 0) {
+        for (i = 0; i < 16; i++) {
+            diff[i] = key[i] ^ 0x5a;
+        }
+        expand_key(st.k2keys, diff);
+    }
+
     COMPILER_ASSERT(sizeof ipcrypt->opaque >= sizeof st);
     memcpy(ipcrypt->opaque, &st, sizeof st);
+
+    return -(d == 0);
 }
 
 /**
@@ -897,17 +947,7 @@ ipcrypt_pfx_init(IPCryptPFX *ipcrypt, const uint8_t key[IPCRYPT_PFX_KEYBYTES])
 void
 ipcrypt_pfx_deinit(IPCryptPFX *ipcrypt)
 {
-#ifdef _MSC_VER
-    SecureZeroMemory(ipcrypt, sizeof *ipcrypt);
-#elif defined(__STDC_LIB_EXT1__)
-    memset_s(ipcrypt, sizeof *ipcrypt, 0, sizeof *ipcrypt);
-#else
-    memset(ipcrypt, 0, sizeof *ipcrypt);
-// Compiler barrier to prevent optimizations from removing memset.
-#    if defined(__GNUC__) || defined(__clang__)
-    __asm__ __volatile__("" : : "r"(ipcrypt) : "memory");
-#    endif
-#endif
+    ipcrypt_zeroize(ipcrypt, sizeof *ipcrypt);
 }
 
 static int
@@ -939,11 +979,14 @@ ipcrypt_pfx_get_bit(const uint8_t ip16[16], const unsigned int bit_index)
 static void
 ipcrypt_pfx_set_bit(uint8_t ip16[16], const unsigned int bit_index, const uint8_t bit_value)
 {
-    if (bit_value) {
-        ip16[15 - bit_index / 8] |= (1 << (bit_index % 8));
-    } else {
-        ip16[15 - bit_index / 8] &= ~(1 << (bit_index % 8));
-    }
+    const size_t  byte_index = 15 - bit_index / 8;
+    const uint8_t bit_mask   = (uint8_t) (1 << (bit_index % 8));
+    uint8_t       mask       = (uint8_t) -((bit_value & 1));
+
+#if defined(__GNUC__) || defined(__clang__)
+    __asm__ __volatile__("" : "+r"(mask) :);
+#endif
+    ip16[byte_index] = (ip16[byte_index] & ~bit_mask) | (bit_mask & mask);
 }
 
 static void
@@ -973,23 +1016,23 @@ void
 ipcrypt_pfx_encrypt_ip16(const IPCryptPFX *ipcrypt, uint8_t ip16[16])
 {
     PFXState     st;
-    BlockVec     e1, e2, e;
+    BlockVec     e1_0, e2_0, e_0, e1_1, e2_1, e_1;
     uint8_t      encrypted_ip[16];
-    uint8_t      padded_prefix[16];
-    uint8_t      t[16];
+    uint8_t      padded_prefix_0[16], padded_prefix_1[16];
+    uint8_t      t_0[16], t_1[16];
     size_t       i;
-    unsigned int bit_pos;
+    unsigned int bit_pos_0, bit_pos_1;
     unsigned int prefix_start = 0;
     unsigned int prefix_len_bits;
-    uint8_t      cipher_bit;
-    uint8_t      original_bit;
+    uint8_t      cipher_bit_0, cipher_bit_1;
+    uint8_t      original_bit_0, original_bit_1;
 
     memcpy(&st, ipcrypt->opaque, sizeof st);
     if (ipcrypt_is_mapped_ipv4(ip16)) {
         prefix_start = 96;
     }
 
-    ipcrypt_pfx_pad_prefix(padded_prefix, prefix_start);
+    ipcrypt_pfx_pad_prefix(padded_prefix_0, prefix_start);
 
     memset(encrypted_ip, 0, 16);
     if (prefix_start == 96) {
@@ -997,38 +1040,77 @@ ipcrypt_pfx_encrypt_ip16(const IPCryptPFX *ipcrypt, uint8_t ip16[16])
         encrypted_ip[11] = 0xff;
     }
 
-    for (prefix_len_bits = prefix_start; prefix_len_bits < 128; prefix_len_bits++) {
+    // Process two bits per iteration for better parallelism
+    for (prefix_len_bits = prefix_start; prefix_len_bits < 128; prefix_len_bits += 2) {
+        // Prepare padded_prefix_1 for the second iteration
+        memcpy(padded_prefix_1, padded_prefix_0, 16);
+        bit_pos_0      = 127 - prefix_len_bits;
+        original_bit_0 = ipcrypt_pfx_get_bit(ip16, bit_pos_0);
+        ipcrypt_pfx_shift_left(padded_prefix_1);
+        ipcrypt_pfx_set_bit(padded_prefix_1, 0, original_bit_0);
+
 #ifdef AES_XENCRYPT
-        // For AArch64 with AES_XENCRYPT macros.
-        e1 = AES_XENCRYPT(LOAD128(padded_prefix), st.k1keys[0]);
-        e2 = AES_XENCRYPT(LOAD128(padded_prefix), st.k2keys[0]);
+        // For AArch64 with AES_XENCRYPT macros - process two encryptions in parallel
+        e1_0 = AES_XENCRYPT(LOAD128(padded_prefix_0), st.k1keys[0]);
+        e2_0 = AES_XENCRYPT(LOAD128(padded_prefix_0), st.k2keys[0]);
+        e1_1 = AES_XENCRYPT(LOAD128(padded_prefix_1), st.k1keys[0]);
+        e2_1 = AES_XENCRYPT(LOAD128(padded_prefix_1), st.k2keys[0]);
+
         for (i = 1; i < ROUNDS - 1; i++) {
-            e1 = AES_XENCRYPT(e1, st.k1keys[i]);
-            e2 = AES_XENCRYPT(e2, st.k2keys[i]);
+            e1_0 = AES_XENCRYPT(e1_0, st.k1keys[i]);
+            e2_0 = AES_XENCRYPT(e2_0, st.k2keys[i]);
+            e1_1 = AES_XENCRYPT(e1_1, st.k1keys[i]);
+            e2_1 = AES_XENCRYPT(e2_1, st.k2keys[i]);
         }
-        e1 = AES_XENCRYPTLAST(e1, st.k1keys[i]);
-        e2 = AES_XENCRYPTLAST(e2, st.k2keys[i]);
-        e1 = XOR128(e1, st.k1keys[ROUNDS]);
-        e2 = XOR128(e2, st.k2keys[ROUNDS]);
+
+        e1_0 = AES_XENCRYPTLAST(e1_0, st.k1keys[i]);
+        e2_0 = AES_XENCRYPTLAST(e2_0, st.k2keys[i]);
+        e1_1 = AES_XENCRYPTLAST(e1_1, st.k1keys[i]);
+        e2_1 = AES_XENCRYPTLAST(e2_1, st.k2keys[i]);
+
+        e1_0 = XOR128(e1_0, st.k1keys[ROUNDS]);
+        e2_0 = XOR128(e2_0, st.k2keys[ROUNDS]);
+        e1_1 = XOR128(e1_1, st.k1keys[ROUNDS]);
+        e2_1 = XOR128(e2_1, st.k2keys[ROUNDS]);
 #else
-        // For x86_64 or a fallback.
-        e1 = XOR128(LOAD128(padded_prefix), st.k1keys[0]);
-        e2 = XOR128(LOAD128(padded_prefix), st.k2keys[0]);
+        // For x86_64 or a fallback - process two encryptions in parallel
+        e1_0 = XOR128(LOAD128(padded_prefix_0), st.k1keys[0]);
+        e2_0 = XOR128(LOAD128(padded_prefix_0), st.k2keys[0]);
+        e1_1 = XOR128(LOAD128(padded_prefix_1), st.k1keys[0]);
+        e2_1 = XOR128(LOAD128(padded_prefix_1), st.k2keys[0]);
+
         for (i = 1; i < ROUNDS; i++) {
-            e1 = AES_ENCRYPT(e1, st.k1keys[i]);
-            e2 = AES_ENCRYPT(e2, st.k2keys[i]);
+            e1_0 = AES_ENCRYPT(e1_0, st.k1keys[i]);
+            e2_0 = AES_ENCRYPT(e2_0, st.k2keys[i]);
+            e1_1 = AES_ENCRYPT(e1_1, st.k1keys[i]);
+            e2_1 = AES_ENCRYPT(e2_1, st.k2keys[i]);
         }
-        e1 = AES_ENCRYPTLAST(e1, st.k1keys[ROUNDS]);
-        e2 = AES_ENCRYPTLAST(e2, st.k2keys[ROUNDS]);
+
+        e1_0 = AES_ENCRYPTLAST(e1_0, st.k1keys[ROUNDS]);
+        e2_0 = AES_ENCRYPTLAST(e2_0, st.k2keys[ROUNDS]);
+        e1_1 = AES_ENCRYPTLAST(e1_1, st.k1keys[ROUNDS]);
+        e2_1 = AES_ENCRYPTLAST(e2_1, st.k2keys[ROUNDS]);
 #endif
-        e = XOR128(e1, e2);
-        STORE128(t, e);
-        cipher_bit   = t[15] & 1;
-        bit_pos      = 127 - prefix_len_bits;
-        original_bit = ipcrypt_pfx_get_bit(ip16, bit_pos);
-        ipcrypt_pfx_set_bit(encrypted_ip, bit_pos, original_bit ^ cipher_bit);
-        ipcrypt_pfx_shift_left(padded_prefix);
-        ipcrypt_pfx_set_bit(padded_prefix, 0, original_bit);
+
+        // Process results for first bit
+        e_0 = XOR128(e1_0, e2_0);
+        STORE128(t_0, e_0);
+        cipher_bit_0 = t_0[15] & 1;
+
+        // Process results for second bit
+        e_1 = XOR128(e1_1, e2_1);
+        STORE128(t_1, e_1);
+        cipher_bit_1   = t_1[15] & 1;
+        bit_pos_1      = bit_pos_0 - 1;
+        original_bit_1 = ipcrypt_pfx_get_bit(ip16, bit_pos_1);
+
+        ipcrypt_pfx_set_bit(encrypted_ip, bit_pos_0, original_bit_0 ^ cipher_bit_0);
+        ipcrypt_pfx_set_bit(encrypted_ip, bit_pos_1, original_bit_1 ^ cipher_bit_1);
+
+        // Update padded_prefix_0 for next iteration
+        ipcrypt_pfx_shift_left(padded_prefix_1);
+        ipcrypt_pfx_set_bit(padded_prefix_1, 0, original_bit_1);
+        memcpy(padded_prefix_0, padded_prefix_1, 16);
     }
     memcpy(ip16, encrypted_ip, 16);
 }
@@ -1145,16 +1227,38 @@ ipcrypt_pfx_decrypt_ip_str(const IPCryptPFX *ipcrypt,
 /**
  * ipcrypt_init initializes an IPCrypt context with a 16-byte key.
  * Expands the key into round keys and stores them in ipcrypt->opaque.
+ * Returns 0 on success.
  */
-void
+int
 ipcrypt_ndx_init(IPCryptNDX *ipcrypt, const uint8_t key[IPCRYPT_NDX_KEYBYTES])
 {
     NDXState st;
+    uint8_t  diff[16];
+    size_t   i;
+    uint8_t  d;
 
     expand_key(st.tkeys, key + 16);
     expand_key(st.rkeys, key);
+
+    /**
+     * Ensure the two keys differ in case of misuse.
+     */
+    STORE128(diff, XOR128(st.tkeys[ROUNDS / 2], st.rkeys[ROUNDS / 2]));
+    d = 0;
+    for (i = 0; i < 16; i++) {
+        d |= diff[i];
+    }
+    if (d == 0) {
+        for (i = 0; i < 16; i++) {
+            diff[i] = key[i] ^ 0x5a;
+        }
+        expand_key(st.rkeys, diff);
+    }
+
     COMPILER_ASSERT(sizeof ipcrypt->opaque >= sizeof st);
     memcpy(ipcrypt->opaque, &st, sizeof st);
+
+    return -(d == 0);
 }
 
 /**
@@ -1163,17 +1267,7 @@ ipcrypt_ndx_init(IPCryptNDX *ipcrypt, const uint8_t key[IPCRYPT_NDX_KEYBYTES])
 void
 ipcrypt_ndx_deinit(IPCryptNDX *ipcrypt)
 {
-#ifdef _MSC_VER
-    SecureZeroMemory(ipcrypt, sizeof *ipcrypt);
-#elif defined(__STDC_LIB_EXT1__)
-    memset_s(ipcrypt, sizeof *ipcrypt, 0, sizeof *ipcrypt);
-#else
-    memset(ipcrypt, 0, sizeof *ipcrypt);
-// Compiler barrier to prevent optimizations from removing memset.
-#    if defined(__GNUC__) || defined(__clang__)
-    __asm__ __volatile__("" : : "r"(ipcrypt) : "memory");
-#    endif
-#endif
+    ipcrypt_zeroize(ipcrypt, sizeof *ipcrypt);
 }
 
 /**
@@ -1289,7 +1383,9 @@ ipcrypt_nd_encrypt_ip_str(const IPCrypt *ipcrypt, char encrypted_ip_str[IPCRYPT_
 
     COMPILER_ASSERT(IPCRYPT_NDIP_STR_BYTES == IPCRYPT_NDIP_BYTES * 2 + 1);
     // Convert to 16-byte IP.
-    ipcrypt_str_to_ip16(ip16, ip_str);
+    if (ipcrypt_str_to_ip16(ip16, ip_str) != 0) {
+        return 0;
+    }
     // Perform non-deterministic encryption.
     ipcrypt_nd_encrypt_ip16(ipcrypt, ndip, ip16, random);
     // Convert the 24-byte ndip to a hex string.
@@ -1374,7 +1470,9 @@ ipcrypt_ndx_encrypt_ip_str(const IPCryptNDX *ipcrypt,
 
     COMPILER_ASSERT(IPCRYPT_NDX_NDIP_STR_BYTES == IPCRYPT_NDX_NDIP_BYTES * 2 + 1);
     // Convert to 16-byte IP.
-    ipcrypt_str_to_ip16(ip16, ip_str);
+    if (ipcrypt_str_to_ip16(ip16, ip_str) != 0) {
+        return 0;
+    }
     // Perform non-deterministic encryption.
     ipcrypt_ndx_encrypt_ip16(ipcrypt, ndip, ip16, random);
     // Convert the 32-byte ndip to a hex string.
@@ -1395,7 +1493,7 @@ ipcrypt_ndx_decrypt_ip_str(const IPCryptNDX *ipcrypt, char ip_str[IPCRYPT_MAX_IP
     uint8_t ip16[16];
     uint8_t ndip[IPCRYPT_NDX_NDIP_BYTES];
     memset(ip_str, 0, IPCRYPT_MAX_IP_STR_BYTES);
-    // Convert the hex string back to a 24-byte buffer.
+    // Convert the hex string back to a 32-byte buffer.
     if (hex2bin(ndip, sizeof ndip, encrypted_ip_str, strlen(encrypted_ip_str)) != sizeof ndip) {
         return 0;
     }

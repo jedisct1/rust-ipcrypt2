@@ -7,6 +7,7 @@ pub fn build(b: *std.Build) void {
     const lib_mod = b.createModule(.{
         .target = target,
         .optimize = optimize,
+        .link_libc = true,
     });
 
     const source_files = &.{"src/ipcrypt2.c"};
@@ -16,10 +17,8 @@ pub fn build(b: *std.Build) void {
         .linkage = .static,
         .name = "ipcrypt2",
         .root_module = lib_mod,
-        .version = .{ .major = 1, .minor = 1, .patch = 6 },
+        .version = .{ .major = 1, .minor = 1, .patch = 11 },
     });
-
-    lib.linkLibC();
 
     b.installArtifact(lib);
 
@@ -39,10 +38,10 @@ pub fn build(b: *std.Build) void {
         ) },
     );
 
-    main_tests.addIncludePath(b.path("src/include"));
-    main_tests.linkLibrary(lib);
+    main_tests.root_module.addIncludePath(b.path("src/include"));
+    main_tests.root_module.linkLibrary(lib);
     if (target.result.os.tag == .windows) {
-        main_tests.linkSystemLibrary("ws2_32");
+        main_tests.root_module.linkSystemLibrary("ws2_32", .{});
     }
 
     const run_main_tests = b.addRunArtifact(main_tests);
