@@ -16,8 +16,7 @@ fn main() {
         .flag_if_supported("-maes")
         .flag_if_supported("-mcrypto")
         .flag_if_supported("-mneon")
-        .flag_if_supported("-maes")
-        .include("src/ipcrypt2src//include")
+        .include("src/ipcrypt2/src/include")
         .file("src/ipcrypt2/src/ipcrypt2.c")
         .compile("ipcrypt2");
 }
