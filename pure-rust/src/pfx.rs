@@ -1,4 +1,4 @@
-use aes::cipher::{BlockEncrypt, KeyInit};
+use aes::cipher::{BlockCipherEncrypt, KeyInit};
 use aes::Aes128;
 use aes::Block;
 use std::net::IpAddr;
