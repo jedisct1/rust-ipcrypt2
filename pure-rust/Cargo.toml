@@ -1,6 +1,6 @@
 [package]
 name = "ipcrypt-rs"
-version = "0.9.5"
+version = "0.10.0"
 edition = "2021"
 authors = ["Frank Denis <github@pureftpd.org>"]
 description = "IP address encryption and obfuscation in pure Rust for IPv4 and IPv6, with deterministic, randomized, and prefix-preserving modes."

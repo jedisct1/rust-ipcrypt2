@@ -1,6 +1,6 @@
 [package]
 name = "ipcrypt2"
-version = "0.9.1"
+version = "0.10.0"
 edition = "2021"
 license = "ISC"
 authors = ["Frank Denis <github@pureftpd.org>"]
@@ -16,7 +16,7 @@ readme = "README.md"
 rand = "0.10"
 
 [build-dependencies]
-cc = "1.2"
+cc = "1.4"
 
 [dev-dependencies]
 criterion = "0.8"
