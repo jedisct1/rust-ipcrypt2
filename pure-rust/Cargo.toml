@@ -3,12 +3,12 @@ name = "ipcrypt-rs"
 version = "0.9.5"
 edition = "2021"
 authors = ["Frank Denis <github@pureftpd.org>"]
-description = "IP address encryption and obfuscation methods in pure Rust"
+description = "IP address encryption and obfuscation in pure Rust for IPv4 and IPv6, with deterministic, randomized, and prefix-preserving modes."
 repository = "https://github.com/jedisct1/rust-ipcrypt2"
 documentation = "https://docs.rs/ipcrypt-rs"
 readme = "README.md"
 license = "ISC"
-keywords = ["encryption", "privacy", "ip", "ipcrypt", "security"]
+keywords = ["ip", "encryption", "obfuscation", "ipcrypt", "prefix-preserving"]
 categories = ["cryptography", "network-programming"]
 
 [features]
