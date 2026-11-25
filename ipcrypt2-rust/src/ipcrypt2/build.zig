@@ -38,7 +38,13 @@ pub fn build(b: *std.Build) void {
         ) },
     );
 
-    main_tests.root_module.addIncludePath(b.path("src/include"));
+    const translate_c = b.addTranslateC(.{
+        .root_source_file = b.path("src/include/ipcrypt2.h"),
+        .target = target,
+        .optimize = optimize,
+        .link_libc = true,
+    });
+    main_tests.root_module.addImport("ipcrypt", translate_c.createModule());
     main_tests.root_module.linkLibrary(lib);
     if (target.result.os.tag == .windows) {
         main_tests.root_module.linkSystemLibrary("ws2_32", .{});
