@@ -4,7 +4,6 @@ version = "0.10.0"
 edition = "2021"
 license = "ISC"
 authors = ["Frank Denis <github@pureftpd.org>"]
-homepage = "https://github.com/jedisct1/rust-ipcrypt2"
 repository = "https://github.com/jedisct1/rust-ipcrypt2"
 documentation = "https://docs.rs/ipcrypt2"
 categories = ["cryptography", "wasm", "security"]
